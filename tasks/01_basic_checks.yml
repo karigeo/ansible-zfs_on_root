@@ -146,6 +146,7 @@
 - name: ZFS Passphrase Validation Block
   when:
     - passphrase is defined
+    - disk_encryption_type == "native"
   tags:
     - always
   block:
@@ -193,6 +194,26 @@
         "{{ disk_by_id }}"
       when:
         debug | default(false)
+
+###############################################################################
+# [ Perform Partition Sizing Sanity Checks ]###################################
+
+#
+- name: Store LVM partition size based on array type (i.e. disk numbers)
+  ansible.builtin.set_fact:
+    lvm_partition_size: "{{ (disk_by_id | length | int > 2) | ternary(raidz_lvm_partition_size, single_or_mirror_lvm_partition_size) }}"
+
+- name: Confirm Sizes of Partitons are Reasonable
+  ansible.builtin.fail:
+    msg: >
+      "ERROR: "
+  when:
+    - create_lvm_partition | bool
+    - lvm_partition_size | regex_search('[0-9]+') | int != 0 
+    - (root_partition_size | regex_search('[0-9]+') | int < lvm_partition_size | regex_search('[0-9]+') | int) or
+      (root_partition_size | regex_search('[0-9]+') | int == 0 )
+  tags:
+    - always
 
 ###############################################################################
 # [ Perform Single Device Basic Sanity Checks ]################################

@@ -23,6 +23,6 @@ galaxy_info:
     - dropbear
     - baremetal
 
-dependencies:
+#dependencies:
   # Ansible role deploys msmtp as a mailer for Debian, Ubuntu
-  - role: chriswayg.msmtp-mailer
+  #- role: chriswayg.msmtp-mailer

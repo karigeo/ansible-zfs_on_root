@@ -7,16 +7,15 @@
   tags:
     - clear_partition_tables_from_devices
   block:
-    - name: Insure Swap Partitions are Not Used
+    - name: Ensure Swap Partitions are Not Used
       ansible.builtin.command:
         cmd: "swapoff --all"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
-    - name: Unmount any mdadm disks that might have been automounted and Stop all found mdadm arrays
-      ansible.builtin.shell: |
-        find /dev -iname md* -type b -exec bash -c \
-        "umount {} > /dev/null 2>&1 ; mdadm --stop --force {} > /dev/null 2>&1 ; mdadm --remove {} > /dev/null 2>&1" \;
+    - name: Destroy ZFS pool from previous usage
+      ansible.builtin.command:
+        cmd: "zpool destroy -f {{ root_pool_name }}"
       register: cmd_output
       changed_when:
         cmd_output.rc == 0
@@ -32,6 +31,39 @@
       ignore_errors: true
       loop:
         "{{ disk_by_id }}"
+
+    - name: Check exisiting (and open) LUKS containers
+      ansible.builtin.shell: |
+        dmsetup ls --target crypt | awk '{print $1}'
+      register: cmd_output
+      changed_when:
+        cmd_output.rc == 0
+      ignore_errors: true
+    
+    - name: Get list of open LUKS containers
+      ansible.builtin.set_fact:
+        current_luks_containers: "{{ cmd_output.stdout | split('\n') }}"
+
+    - name: Debug list of open LUKS containers
+      ansible.builtin.debug:
+        msg: "{{ current_luks_containers }}"
+      when:
+        - debug | default(false)
+    
+    - name: Close (and remove) open LUKS containers
+      community.crypto.luks_device:
+        name: "{{ item }}"
+        state: "absent"
+      loop: "{{ current_luks_containers }}"
+
+    - name: Unmount any mdadm disks that might have been automounted and Stop all found mdadm arrays
+      ansible.builtin.shell: |
+        find /dev -iname md* -type b -exec bash -c \
+        "umount {} > /dev/null 2>&1 ; mdadm --stop --force {} > /dev/null 2>&1 ; mdadm --remove {} > /dev/null 2>&1" \;
+      register: cmd_output
+      changed_when:
+        cmd_output.rc == 0
+      ignore_errors: true
 
     - name: Wipe mdadm superblock from partitions
       ansible.builtin.command:

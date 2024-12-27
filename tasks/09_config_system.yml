@@ -20,6 +20,7 @@
         label: "{{ item }}.j2"
 
     # Update Netplan Network file - not tested on multiple adapters, might break
+    # Works also on Debian Bookworm Live ISO
     - name: Get Network adapter name on Ubuntu
       ansible.builtin.shell: |
         set -o pipefail

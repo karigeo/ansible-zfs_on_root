@@ -1,0 +1,21 @@
+---
+- name: Create LUKS Containers
+  when:
+    - ansible_nodename != "localhost"
+  tags:
+    - notag
+  block:
+    - name: Overwrite disk_by_id
+      ansible.builtin.set_fact:
+        disk_by_id:
+          - "/dev/disk/by-id/ata-QEMU_HARDDISK_MYSUPERSERIAL123"
+          - "/dev/disk/by-id/ata-QEMU_HARDDISK_MYSUPERSERIAL456"
+    - name: Overwrite device_list
+      ansible.builtin.set_fact:
+        device_list: "{{ (disk_encryption_type == 'luks') | ternary(['/dev/mapper/crypt_'] | product(disk_by_id|map('regex_search','([^\/]+$)')|list) | map('join','') | product(['_root']) | map('join','') , disk_by_id ) }}"
+    - name: Debug Output
+      ansible.builtin.debug:
+        msg: "{{ device_list }}"
+      when:
+        - debug | default(false)
+

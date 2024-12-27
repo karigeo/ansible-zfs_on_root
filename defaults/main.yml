@@ -3,7 +3,7 @@
 # Ansible Specific Settings
 ###############################################################################
 # Don't log secret like ZFS on Root Password when running playbook
-no_log_secrets: true
+no_log_secrets: false
 
 ###############################################################################
 # User Settings
@@ -47,7 +47,7 @@ enable_ubuntu_lts_hwe: false
 locale_prefix: "en_US.UTF-8"
 
 # Define the timezone to be placed in /etc/timezone
-timezone_value: "America/New_York"
+timezone_value: "Europe/Berlin"
 
 # Disable IPv6 if you do not use it.  The "disable_settings" will be applied to
 # "conf_file"
@@ -112,6 +112,20 @@ single_or_mirror_swap_partition_size_mb: "4096"
 raidz_swap_partition_size_mb: "1024"
 
 ###############################################################################
+# Disk Encryption Settings
+###############################################################################
+# Prompt for Encryption Passphrase.  if true, then prompt for
+# passphrase if not provided.
+prompt_for_zfs_passphrase: true
+
+# Specify wether to use LUKS or ZFS native encryption.
+# If an additional LVM Volume is defined, it's encryption will always be LUKS
+# "native" for ZFS native encryption
+# "luks" for LUKS encryption
+# "none" for no encryption
+disk_encryption_type: luks
+
+###############################################################################
 # Root Pool Settings
 ###############################################################################
 # Define Pool Names - can be set to whatever you like.
@@ -134,11 +148,25 @@ zfs_compression: "lz4"
 # "+256G" will create partition 256Gib in size
 # "-200M" will use all available space, minus 200Mib
 # "0" (zero) use all available space
-root_partition_size: "0"
+root_partition_size: "-4G"
 
-# Prompt for Native ZFS Encryption Passphrase.  if true, then prompt for
-# passphrase if not provided.
-prompt_for_zfs_passphrase: false
+###############################################################################
+# LVM Pool Settings
+###############################################################################
+#Define if additional LVM Partition should be created:
+create_lvm_partition: true
+
+# Define LVM Pool partition size
+# "+256G" will create partition 256Gib in size
+# "-200M" will use all available space, minus 200Mib
+# "0" (zero) use all available space
+
+# LVM partition size when one or two devices are used
+single_or_mirror_lvm_partition_size: "0"
+
+# LVM partition size, per device, when three or more devices are used.
+# Estimated size is:  #devices-1 * size
+raidz_lvm_partition_size: "0"
 
 ###############################################################################
 # ZFS Specific Adjustable Settings

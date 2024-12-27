@@ -11,7 +11,7 @@ ANSIBLE_USER=ansible
 # Create ansible account and a home directory to store SSH keys
 echo
 echo "-----------------------------------------------------------------------------"
-sudo useradd -m $ANSIBLE_USER
+sudo useradd -m $ANSIBLE_USER -s /bin/bash
 if [[ $? -ne 0 ]]; then 
   echo ERROR: was unable to add $ANSIBLE_USER user, already created?
 else
@@ -44,6 +44,9 @@ sudo swapoff -a
 
 # Disable automounting, if disk has been used before it will be mounted if not disabled
 gsettings set org.gnome.desktop.media-handling automount false
+
+# Disable hibernating, suspend, etc on Debian Live CD:
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
 # See if we are in a terminal or pipe
 if [[ ! -p /dev/stdin ]]; then

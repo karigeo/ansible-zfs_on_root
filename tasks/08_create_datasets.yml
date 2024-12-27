@@ -38,20 +38,20 @@
         loop_var: mount_path
         label: "{{ mount_path.path }}"
 
-    - name: Mount run directory as tmpfs # noqa command-instead-of-module
-      ansible.builtin.command:
-        "mount -t tmpfs tmpfs {{ live_cd_mountpoint }}/run"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    # - name: Mount run directory as tmpfs # noqa command-instead-of-module
+    #   ansible.builtin.command:
+    #     "mount -t tmpfs tmpfs {{ live_cd_mountpoint }}/run"
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
 
-    - name: Installing a minimal linux system
-      ansible.builtin.command:
-        "debootstrap {{ ubuntu_release }} {{ live_cd_mountpoint }}"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    # - name: Installing a minimal linux system
+    #   ansible.builtin.command:
+    #     "debootstrap {{ ubuntu_release }} {{ live_cd_mountpoint }}"
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
 
-    - name: Disable ZFS Device Node support
-      ansible.builtin.command:
-        "zfs set devices=off {{ root_pool_name }}"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    # - name: Disable ZFS Device Node support
+    #   ansible.builtin.command:
+    #     "zfs set devices=off {{ root_pool_name }}"
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0

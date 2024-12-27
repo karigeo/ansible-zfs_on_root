@@ -31,23 +31,36 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
+# ###[ Change APT Sources on Live CD Environment ]##############################
+- name: Update apt sources.list
+  tags:
+    - install-zfs-packages
+  block:
+    - name: Remove default apt lists
+      ansible.builtin.file:
+        name: /etc/apt/sources.list
+        state: absent
+    - name: Copy apt sources template in place
+      ansible.builtin.template:
+        src: sources.list.j2
+        dest: "/etc/apt/sources.list.d/{{ ansible_distribution_release }}.list"
+        owner: root
+        group: root
+        mode: "0o644"
+
 # ##[ Install Packages Need to get Started ]####################################
 - name: Install Packages Need to get Started
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - ansible_distribution == "Debian"
   tags:
     - install-zfs-packages
   block:
     - name: Install ZFS packages (assumes Live CD Environment)
       ansible.builtin.apt:
-        name: ['debootstrap', 'gdisk', 'zfs-initramfs', 'dosfstools', 'mdadm']
+        name: ['debootstrap', 'gdisk', 'zfsutils-linux', 'dosfstools', 'mdadm', 'cryptsetup']
         state: present
         update_cache: true
         cache_valid_time: 3600
-
-    - name: Stop ZED Service
-      ansible.builtin.systemd:
-        name: zed
-        enabled: true
-        state: stopped
 
 ###############################################################################
