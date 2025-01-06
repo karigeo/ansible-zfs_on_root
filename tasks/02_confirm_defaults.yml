@@ -20,7 +20,6 @@
 
       Environment Installation: {% if command_line_only | default(false) | bool %}Command-line only{% else %}Full GUI Environment{% endif %}
 
-             Ubuntu HWE Kernel: {{ enable_ubuntu_lts_hwe }}
         Create Swap Partitions: {{ enable_swap_partitions }}
       {% if enable_swap_partitions | default(true) | bool%}
       {% if disk_by_id | length | int == 1 %}
@@ -39,8 +38,13 @@
 
               Use UEFI Booting: {{ use_uefi_booting_msg | default('') }}
 
-                  Local Prefix: {{ locale_prefix }}
-                     Time Zone: {{ timezone_value }}
+                  Local Prefix: {{ default_locale }}
+                     Time Zone: {{ timezone_area }}/{{ timezone_city }}
+
+                Keyboard Model: {{ keyboard_model }}
+              Keyboard Variant: {{ keyboard_variant }}
+               Keyboard Layout: {{ keyboard_layout }}
+
 
         Disk Devices Specified: {{ disk_by_id | length }}
             ZFS Root Pool Name: {{ root_pool_name }}  {% if disk_by_id | length | int > 1 %}Type: {{ root_pool_type }}{% if (root_pool_type == "mirror") and (disk_by_id | length | int > 3) %} of {{ (disk_by_id | length | int / 2) | int }} mirrored vdevs{% endif %}{% else %}          Type: Single Device{% endif %}
@@ -51,11 +55,11 @@
         Partition Size Setting: {{ root_partition_size }}
       {% endif %}
 
-      Use ZFS Native Encryption: {{ root_pool_encryption }}
+        Encryption Type to use: {{ disk_encryption_type }}
       {% if root_pool_encryption | default(false) | bool == true %}
           Encryption Passphrase: {{ (no_log_secrets | default(true)) | ternary("**********", passphrase) }}
       {% else %}
-        To enable ZFS Native Encryption:
+        To enable Encryption:
         Add passphrase: "<your_passphrase>" to --extra-vars='{disk_devices: {{ disk_devices }},host_name: "{{ host_name }}",passphrase: "mys3cret"}'
       {% endif %}
 

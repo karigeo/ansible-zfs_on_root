@@ -1,0 +1,134 @@
+---
+###############################################################################
+# [ Should be in chroot env now ]##############################################
+
+- name: Configure new system in chroot environment
+  when:
+    - ansible_nodename != "localhost"
+  tags:
+    - config_system
+  block:
+    - name: Ensure all packages are up to date
+      apt:
+        upgrade: safe
+        force_apt_get: true
+        autoclean: true
+        autoremove: true
+        update_cache: true
+
+    - name: Install some requirements
+      apt:
+        name:
+          - console-setup
+          - locales
+          - dpkg-dev
+          - debconf
+          - debconf-utils
+        state: present
+        install_recommends: false
+
+    - name: Purge os-prober
+      apt:
+        name:
+          - os-prober
+        state: absent
+        purge: true
+
+    - name: Ensure the requested locale exists
+      community.general.locale_gen:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - "{{ default_locale }}"
+
+    - name: Set default locale
+      debconf:
+        name: locales
+        question: locales/default_environment_locale
+        value: "{{ default_locale }}"
+        vtype: select
+      notify: reconf locales
+
+    - name: Configure locales to generate
+      debconf:
+        name: locales
+        question: locales/locales_to_be_generated
+        value: "{{ default_locale }} UTF-8"
+        vtype: multiselect
+      notify: reconf locales
+
+    - name: Set timezone area
+      debconf:
+        name: tzdata
+        question: tzdata/Areas
+        value: "{{ timezone_area }}"
+        vtype: select
+      notify: reconf tzdata
+
+    - name: Set timezone city
+      debconf:
+        name: tzdata
+        question: "tzdata/Zones/{{ timezone_area }}"
+        value: "{{ timezone_city }}"
+        vtype: select
+      notify: reconf tzdata
+
+    - name: Set timezone UTC
+      debconf:
+        name: tzdata
+        question: tzdata/Zones/Etc
+        value: UTC
+        vtype: select
+      notify: reconf tzdata
+
+    - name: Set keyboard model
+      debconf:
+        name: keyboard-configuration
+        question: keyboard-configuration/model
+        value: "{{ keyboard_model }}"
+        vtype: select
+      notify: reconf keyboard configuration
+
+    - name: Set keyboard variant
+      debconf:
+        name: keyboard-configuration
+        question: keyboard-configuration/variant
+        value: "{{ keyboard_variant }}"
+        vtype: select
+      notify: reconf keyboard configuration
+
+    - name: Set keyboard layout
+      debconf:
+        name: keyboard-configuration
+        question: keyboard-configuration/layout
+        value: "{{ keyboard_layout }}"
+        vtype: select
+      notify: reconf keyboard configuration
+
+    - name: Set keyboard altgr key
+      debconf:
+        name: keyboard-configuration
+        question: keyboard-configuration/altgr
+        value: "{{ keyboard_altgr }}"
+        vtype: select
+      notify: reconf keyboard configuration
+
+    - name: Set keyboard compose key
+      debconf:
+        name: keyboard-configuration
+        question: keyboard-configuration/compose
+        value: "{{ keyboard_compose }}"
+        vtype: select
+      notify: reconf keyboard configuration
+
+    - name: Set keyboard shortcut to kill xserver
+      debconf:
+        name: keyboard-configuration
+        question: keyboard-configuration/ctrl_alt_bksp
+        value: "{{ keyboard_killx }}"
+        vtype: boolean
+      notify: reconf keyboard configuration
+    
+    - name: Force handlers to run
+      ansible.builtin.meta: flush_handlers
+###############################################################################

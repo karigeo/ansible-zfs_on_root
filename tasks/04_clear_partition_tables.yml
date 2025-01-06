@@ -13,6 +13,14 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
+    - name: Force / lazy unmount /mnt
+      ansible.builtin.command:
+        cmd: "umount --lazy /mnt"
+      register: cmd_output
+      changed_when:
+        cmd_output.rc == 0
+      ignore_errors: true
+
     - name: Destroy ZFS pool from previous usage
       ansible.builtin.command:
         cmd: "zpool destroy -f {{ root_pool_name }}"

@@ -31,6 +31,25 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
+- name: Setup SSH Server to allow chroot Connection
+  tags:
+    - install-zfs-packages
+  block:
+    - name: Configure sshd to allow connecting directly inside the chroot
+      notify: Restart sshd
+      ansible.builtin.blockinfile:
+       block: |
+         Port 22
+         Port 8922
+         Match LocalPort 8922
+           ChrootDirectory /mnt
+       path: /etc/ssh/sshd_config
+       validate: /usr/sbin/sshd -T -C lport=22 -f %s
+
+    - name: Force handlers to run
+      ansible.builtin.meta: flush_handlers
+  
+
 # ###[ Change APT Sources on Live CD Environment ]##############################
 - name: Update apt sources.list
   tags:

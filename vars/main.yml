@@ -4,7 +4,7 @@
 ####### Nothing Below Here Needs to be Edited ############
 debug: true
 
-# Ubuntu Release name
+# Distro Release name
 distro_release: "bookworm"
 distro_name: "debian"
 distro_version: "12.8"
@@ -76,7 +76,7 @@ root_pool_container_options:
   - "{{ ' ' + (root_pool_encryption | default(false)) | ternary(root_pool_encryption_options | join(' '), '') }}"
   - "{{ root_pool_name }}/ROOT"
 
-root_pool_dataset_path: "{{ root_pool_name }}/ROOT/{{ distro_name }}"
+root_pool_dataset_path: "{{ root_pool_name }}/ROOT/{{ root_dataset_name }}"
 root_dataset_options:
   - "-o mountpoint=/"
   - "-o canmount=noauto"
@@ -90,22 +90,19 @@ datasets_to_create:
   - "{{ root_pool_dataset_path }}/usr/local"
   - "-o canmount=off {{ root_pool_dataset_path }}/var"
   - "-o com.sun:auto-snapshot=false {{ root_pool_dataset_path }}/var/cache"
-  - "{{ root_pool_dataset_path }}/var/games"
   - "-o canmount=off {{ root_pool_dataset_path }}/var/lib"
-  - "{{ root_pool_dataset_path }}/var/lib/AccountsService"
-  - "{{ root_pool_dataset_path }}/var/lib/apt"
-  - "{{ root_pool_dataset_path }}/var/lib/dpkg"
-  - "-o com.sun:auto-snapshot=false {{ root_pool_dataset_path }}/var/lib/docker"
-  - "{{ root_pool_dataset_path }}/var/lib/NetworkManager"
   - "{{ root_pool_dataset_path }}/var/log"
   - "{{ root_pool_dataset_path }}/var/mail"
-  - "{{ root_pool_dataset_path }}/var/snap"
   - "{{ root_pool_dataset_path }}/var/spool"
   - "-o com.sun:auto-snapshot=false {{ root_pool_dataset_path }}/var/tmp"
   - "{{ root_pool_dataset_path }}/var/www"
   # Home Directory Dataset will be kept outside of OS Dataset
   - "-o canmount=on -o mountpoint=/home -o compression={{ zfs_compression }} -o atime=off {{ root_pool_home_dataset_path }}"
   - "-o canmount=on -o mountpoint=/root {{ root_pool_home_dataset_path }}/root"
+  # PVE specific datasets:
+  - "{{ root_pool_dataset_path }}/var/lib/vz"
+  - "-o canmount=on -o mountpoint=/etc/pve  {{ root_pool_dataset_path }}/etc-pve"
+  - "-o canmount=on -o mountpoint=/{{ root_pool_name }}/data {{ (root_pool_encryption | default(false)) | ternary(root_pool_encryption_options | join(' '), '') }} {{ root_pool_name }}/data"
 
 ###############################################################################
 # [ Variable below are unrelated to ZFS ]######################################
@@ -138,10 +135,8 @@ syslinx_path: "{{ efi_boot_mountpoint }}/syslinux"
 remove_os_prober: true
 
 # Packages required to be held (not installed or updated) that conflict with
-# Dract and or rEFInd Packages
+# rEFInd Packages
 packages_to_mark_hold:
-  - "zfs-initramfs"
-  - "initramfs-tools"
   - "grub-efi-amd64"
   - "grub-efi-amd64-signed"
   - "grub-efi-amd64-bin"

@@ -39,26 +39,20 @@ refind_boot_menu_logo: true
 # environment (set to true)
 command_line_only: true
 
-# The Ubuntu LTS enablement (also called HWE or Hardware Enablement) stacks
-# provide newer kernel and X support for existing Ubuntu LTS releases.
-enable_ubuntu_lts_hwe: false
+# Define the locale to be set with dpkg-reconfigure
+default_locale: "en_US.UTF-8"
 
-# Define the local pre-fix to enable in /etc/locale.gen
-locale_prefix: "en_US.UTF-8"
+# Define the timezone to be set with dpkg-reconfigure
+timezone_area: "Europe"
+timezone_city: "Berlin"
 
-# Define the timezone to be placed in /etc/timezone
-timezone_value: "Europe/Berlin"
-
-# Disable IPv6 if you do not use it.  The "disable_settings" will be applied to
-# "conf_file"
-ipv6:
-  disable: true
-  conf_file: "/etc/sysctl.d/99-sysctl.conf"
-  disable_settings:
-    - "net.ipv6.conf.all.disable_ipv6 = 1"
-    - "net.ipv6.conf.default.disable_ipv6 = 1"
-    - "net.ipv6.conf.lo.disable_ipv6 = 1"
-  apply_cmd: "sysctl -p"
+# Define Keyboard Configuration to set with dpkg-reconfigure
+keyboard_model: "Generic 105-key PC"
+keyboard_variant: "German"
+keyboard_layout: "German"
+keyboard_altgr: "The default for the keyboard layout"
+keyboard_compose: "No compose key"
+keyboard_killx: true
 
 # Define additional packages to install once the build has completed.
 additional_install_packages:
@@ -99,6 +93,36 @@ msmtp:
       password: "{{ secret_msmtp_auth_password | default('not defined within vars/secrets/main.yml') }}"
 
 ###############################################################################
+# Network Configuration
+###############################################################################
+# Disable IPv6 if you do not use it.  The "disable_settings" will be applied to
+# "conf_file"
+ipv6:
+  disable: true
+  conf_file: "/etc/sysctl.d/99-sysctl.conf"
+  disable_settings:
+    - "net.ipv6.conf.all.disable_ipv6 = 1"
+    - "net.ipv6.conf.default.disable_ipv6 = 1"
+    - "net.ipv6.conf.lo.disable_ipv6 = 1"
+  apply_cmd: "sysctl -p"
+
+# As this is intended to install Proxmox, we should define a static IP and a VLAN aware bridge
+# address_type can be "manual" "static" or "dhcp"
+ipv4:
+  iface:
+    name: enp2s1
+    address_type: manual
+    network_address: none
+    gateway: none
+  bridge:
+    name: vmbr0
+    address_type: static
+    network_address: "10.11.50.61/24"
+    gateway: 10.11.50.1
+  dns_nameserver: 10.11.50.1
+  dns_search_domain: intern.bsicloud.de
+
+###############################################################################
 # Swap Partition Settings
 ###############################################################################
 # Create Swap Partitions
@@ -130,7 +154,11 @@ disk_encryption_type: luks
 ###############################################################################
 # Define Pool Names - can be set to whatever you like.
 # Short hostname is default, this is like "rpool" in the previous methods.
-root_pool_name: "{{ host_name }}"
+root_pool_name: "rpool"
+
+# Name of the dataset for the root filesystem
+# {{ root_pool_name }}/ROOT/{{ root_dataset_name }}
+root_dataset_name: "pve-1"
 
 # Define ZFS default compression to enable
 zfs_compression: "lz4"
@@ -153,7 +181,7 @@ root_partition_size: "-4G"
 ###############################################################################
 # LVM Pool Settings
 ###############################################################################
-#Define if additional LVM Partition should be created:
+# Define if additional LVM Partition should be created:
 create_lvm_partition: true
 
 # Define LVM Pool partition size
