@@ -33,7 +33,7 @@ domain_name: "localdomain"
 refind_boot_menu_timeout: "10"
 
 # Enables background image for refind / syslinux (see files/logo.jpg)
-refind_boot_menu_logo: true
+refind_boot_menu_logo: false
 
 # For Full GUI Desktop installation (set to false) or command-line only server
 # environment (set to true)

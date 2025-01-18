@@ -9,7 +9,7 @@
     - config_system
   block:
     - name: Ensure all packages are up to date
-      apt:
+      ansible.builtin.apt:
         upgrade: safe
         force_apt_get: true
         autoclean: true
@@ -17,22 +17,27 @@
         update_cache: true
 
     - name: Install some requirements
-      apt:
+      ansible.builtin.apt:
         name:
           - console-setup
           - locales
           - dpkg-dev
           - debconf
           - debconf-utils
+          - mdadm
+          - dosfstools
         state: present
         install_recommends: false
 
     - name: Purge os-prober
-      apt:
+      ansible.builtin.apt:
         name:
           - os-prober
         state: absent
         purge: true
+      when:
+        - ansible_os_family == "Debian"
+        - remove_os_prober == true
 
     - name: Ensure the requested locale exists
       community.general.locale_gen:
@@ -42,7 +47,7 @@
         - "{{ default_locale }}"
 
     - name: Set default locale
-      debconf:
+      ansible.builtin.debconf:
         name: locales
         question: locales/default_environment_locale
         value: "{{ default_locale }}"
@@ -50,7 +55,7 @@
       notify: reconf locales
 
     - name: Configure locales to generate
-      debconf:
+      ansible.builtin.debconf:
         name: locales
         question: locales/locales_to_be_generated
         value: "{{ default_locale }} UTF-8"
@@ -58,7 +63,7 @@
       notify: reconf locales
 
     - name: Set timezone area
-      debconf:
+      ansible.builtin.debconf:
         name: tzdata
         question: tzdata/Areas
         value: "{{ timezone_area }}"
@@ -66,7 +71,7 @@
       notify: reconf tzdata
 
     - name: Set timezone city
-      debconf:
+      ansible.builtin.debconf:
         name: tzdata
         question: "tzdata/Zones/{{ timezone_area }}"
         value: "{{ timezone_city }}"
@@ -74,7 +79,7 @@
       notify: reconf tzdata
 
     - name: Set timezone UTC
-      debconf:
+      ansible.builtin.debconf:
         name: tzdata
         question: tzdata/Zones/Etc
         value: UTC
@@ -82,7 +87,7 @@
       notify: reconf tzdata
 
     - name: Set keyboard model
-      debconf:
+      ansible.builtin.debconf:
         name: keyboard-configuration
         question: keyboard-configuration/model
         value: "{{ keyboard_model }}"
@@ -90,7 +95,7 @@
       notify: reconf keyboard configuration
 
     - name: Set keyboard variant
-      debconf:
+      ansible.builtin.debconf:
         name: keyboard-configuration
         question: keyboard-configuration/variant
         value: "{{ keyboard_variant }}"
@@ -98,7 +103,7 @@
       notify: reconf keyboard configuration
 
     - name: Set keyboard layout
-      debconf:
+      ansible.builtin.debconf:
         name: keyboard-configuration
         question: keyboard-configuration/layout
         value: "{{ keyboard_layout }}"
@@ -106,7 +111,7 @@
       notify: reconf keyboard configuration
 
     - name: Set keyboard altgr key
-      debconf:
+      ansible.builtin.debconf:
         name: keyboard-configuration
         question: keyboard-configuration/altgr
         value: "{{ keyboard_altgr }}"
@@ -114,7 +119,7 @@
       notify: reconf keyboard configuration
 
     - name: Set keyboard compose key
-      debconf:
+      ansible.builtin.debconf:
         name: keyboard-configuration
         question: keyboard-configuration/compose
         value: "{{ keyboard_compose }}"
@@ -122,7 +127,7 @@
       notify: reconf keyboard configuration
 
     - name: Set keyboard shortcut to kill xserver
-      debconf:
+      ansible.builtin.debconf:
         name: keyboard-configuration
         question: keyboard-configuration/ctrl_alt_bksp
         value: "{{ keyboard_killx }}"

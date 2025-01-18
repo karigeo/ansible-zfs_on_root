@@ -5,17 +5,29 @@
   tags:
     - notag
   block:
-    - name: Overwrite disk_by_id
-      ansible.builtin.set_fact:
-        disk_by_id:
-          - "/dev/disk/by-id/ata-QEMU_HARDDISK_MYSUPERSERIAL123"
-          - "/dev/disk/by-id/ata-QEMU_HARDDISK_MYSUPERSERIAL456"
-    - name: Overwrite device_list
-      ansible.builtin.set_fact:
-        device_list: "{{ (disk_encryption_type == 'luks') | ternary(['/dev/mapper/crypt_'] | product(disk_by_id|map('regex_search','([^\/]+$)')|list) | map('join','') | product(['_root']) | map('join','') , disk_by_id ) }}"
+    - name: Try to get all mounts
+      ansible.builtin.mount_facts:
+        include_aggregate_mounts: true
+        sources: all
+    # - name: Update facts module
+    #   setup:
     - name: Debug Output
       ansible.builtin.debug:
-        msg: "{{ device_list }}"
+        msg: "{{ ansible_facts['mount_points'] }}"
       when:
         - debug | default(false)
+    - name: Binding virtual file systems
+      ansible.posix.mount:
+        path: "{{ item.target }}"
+        src: "{{ item.source }}"
+        fstype: "{{ item.fstype }}"
+        opts: "{{ item.options }}"
+        state: ephemeral
+      loop:
+        - { options: '',     fstype: 'proc',   source: '/proc', target: '/mnt/proc'}
+        - { options: '',     fstype: 'sysfs',  source: 'sys',   target: '/mnt/sys'}
+        - { options: 'bind', fstype: '',       source: '/dev',  target: '/mnt/dev'}
+        - { options: '',     fstype: 'devpts', source: 'pts',   target: '/mnt/dev/pts'}
+      when:
+        - item.target not in ansible_facts['mount_points']
 

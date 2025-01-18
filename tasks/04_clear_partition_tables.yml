@@ -40,9 +40,9 @@
       loop:
         "{{ disk_by_id }}"
 
-    - name: Check exisiting (and open) LUKS containers
+    - name: Check exisiting LUKS containers on specified disks
       ansible.builtin.shell: |
-        dmsetup ls --target crypt | awk '{print $1}'
+        lsblk -l -o NAME,FSTYPE,UUID | awk -F ' ' ' /{{ disk_devices | join('|') }}/ { if ( (NF == 3) && ($2 == "crypto_LUKS") ) {print $3} }'
       register: cmd_output
       changed_when:
         cmd_output.rc == 0
@@ -60,7 +60,7 @@
     
     - name: Close (and remove) open LUKS containers
       community.crypto.luks_device:
-        name: "{{ item }}"
+        uuid: "{{ item }}"
         state: "absent"
       loop: "{{ current_luks_containers }}"
 

@@ -6,47 +6,70 @@
   tags:
     - install_refind
   block:
-    - name: Run chroot command to install rEFInd Boot Manager
+    - name: Install rEFInd Boot Manager
+      ansible.builtin.apt:
+        name: refind
+        state: present
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: Make sure efivars are mounted
+      ansible.posix.mount:
+        path: /sys/firmware/efi/efivars
+        src: efivarfs
+        fstype: efivarfs
+        state: ephemeral
+
+    - name: Create Directories for zfs-boot-menu and refind
+      ansible.builtin.file:
+        state: directory
+        path: "{{ item }}"
+        owner: root
+        group: root
+      loop:
+        - "{{ zfs_boot_menu_path }}"
+        - "{{ refind_path }}"
+
+    - name: Run command to install rEFInd Boot Manager
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: "{{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
-        - "DEBIAN_FRONTEND=noninteractive apt-get install --yes refind"
         - "refind-install --yes"
-        - "mkdir -p {{ zfs_boot_menu_path }}"
-        - "mkdir -p {{ refind_path }}"
       when:
         - ansible_os_family == "Debian"
 
     - name: Copy rEFInd template to /mnt/boot/efi/EFI/zfsbootmenu/refind_linux.conf
       ansible.builtin.template:
         src: refind_linux.conf.j2
-        dest: "{{ live_cd_mountpoint }}{{ zfs_boot_menu_path }}/refind_linux.conf"
+        dest: "{{ zfs_boot_menu_path }}/refind_linux.conf"
         owner: "root"
         group: "root"
         mode: "0644"
 
     # If we're running under legacy bios then rEFInd will be installed
     # to /boot/efi/EFI/BOOT - we want it in /boot/efi/EFI/refind
-    - name: Run chroot command to Move rEFInd if under Legacy BIOS
+    - name: Run command to Move rEFInd if under Legacy BIOS
+      when:
+        - not uefi_mode
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: "{{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
-        - "[ -e {{ efi_boot_path }}/BOOT ] && mvrefind {{ efi_boot_path }}/BOOT {{ refind_path }} || true"
+        - "mvrefind {{ efi_boot_path }}/BOOT {{ refind_path }}"
 
     - name: Reduce rEFIND boot menu timeout from 20 seconds to new value
       ansible.builtin.replace:
-        path: "{{ live_cd_mountpoint }}{{ refind_path }}/refind.conf"
+        path: "{{ refind_path }}/refind.conf"
         regexp: '^timeout .*'
         replace: 'timeout {{ refind_boot_menu_timeout }}'
 
     - name: Copy Logo Images and Icons
       ansible.builtin.copy:
         src: "files/{{ item.source }}"
-        dest: "{{ live_cd_mountpoint }}/{{ item.dest }}"
+        dest: "{{ item.dest }}"
         owner: "root"
         group: "root"
         mode: "0644"
@@ -58,7 +81,7 @@
 
     - name: Enable banner_scale for Logo Images
       ansible.builtin.replace:
-        path: "{{ live_cd_mountpoint }}{{ refind_path }}/refind.conf"
+        path: "{{ refind_path }}/refind.conf"
         regexp: '^#banner_scale (.*$)'
         replace: 'banner_scale \1'
       when:
@@ -66,16 +89,16 @@
 
     - name: Set Banner Logo Images
       ansible.builtin.replace:
-        path: "{{ live_cd_mountpoint }}{{ refind_path }}/refind.conf"
+        path: "{{ refind_path }}/refind.conf"
         regexp: '^#banner hostname.bmp(.*$)'
         replace: 'banner logo.jpg'
       when:
         - refind_boot_menu_logo  | default(false)
 
-    - name: Copy startup script with multiple disks template to /mnt/boot/efi/startup.nsh
+    - name: Copy startup script with multiple disks template to /boot/efi/startup.nsh
       ansible.builtin.template:
         src: startup.nsh.j2
-        dest: "{{ live_cd_mountpoint }}/boot/efi/startup.nsh"
+        dest: "{{ efi_boot_mountpoint }}/startup.nsh"
         owner: "root"
         group: "root"
         mode: "0644"

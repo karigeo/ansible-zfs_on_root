@@ -6,21 +6,26 @@
   tags:
     - config_system
   block:
-    - name: Mount run directory as tmpfs # noqa command-instead-of-module
-      ansible.builtin.command:
-        "mount -t tmpfs tmpfs {{ live_cd_mountpoint }}/run"
-      # register: cmd_output
-      # changed_when: cmd_output.rc == 0
-      args:
-        creates: "{{ live_cd_mountpoint }}/run"
+    # - name: Mount run directory as tmpfs # noqa command-instead-of-module
+    #   ansible.builtin.command:
+    #     "mount -t tmpfs tmpfs {{ live_cd_mountpoint }}/run"
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
+
+    - name: Mount run directory as tmpfs
+      ansible.posix.mount:
+        path: "{{ live_cd_mountpoint }}/run"
+        src: tmpfs
+        fstype: tmpfs
+        state: ephemeral
 
     - name: Installing a minimal linux system
       ansible.builtin.command:
-        "debootstrap --include lsb-release,python3,python3-apt,sudo {{ distro_release }} {{ live_cd_mountpoint }}"
+        "debootstrap --include lsb-release,python3,python3-apt,sudo,openssh-server {{ distro_release }} {{ live_cd_mountpoint }}"
       # register: cmd_output
       # changed_when: cmd_output.rc == 0
       args:
-        creates: "/mnt/etc"
+        creates: "{{ live_cd_mountpoint }}/etc/passwd"
 
     - name: Disable ZFS Device Node support
       ansible.builtin.command:
@@ -49,16 +54,21 @@
         label: "{{ item }}.j2"
 
     # Update Netplan Network file - not tested on multiple adapters, might break
-    # Works also on Debian Bookworm Live ISO
-    - name: Get Network adapter name
-      ansible.builtin.shell: |
-        set -o pipefail
-        nmcli device status | grep 'ethernet' | grep 'connected' | cut -d' ' -f1
-      args:
-        executable: /bin/bash
-      changed_when: nic_name.rc == 0
-      register:
-        nic_name
+    # Works also on Debian Bookworm Live ISO with KDE
+    # - name: Get Network adapter name
+    #   ansible.builtin.shell: |
+    #     set -o pipefail
+    #     nmcli device status | grep 'ethernet' | grep 'connected' | cut -d' ' -f1
+    #   args:
+    #     executable: /bin/bash
+    #   changed_when: nic_name.rc == 0
+    #   register:
+    #     nic_name
+
+    - name: Get Network adapter name from ansible facts
+      ansible.builtin.set_fact:
+        nic_name:
+          stdout: "{{ ansible_default_ipv4.interface }}"
 
     - name: Store Network adapter name
       ansible.builtin.set_fact:
@@ -114,18 +124,25 @@
   tags:
     - config_system
   block:
+    - name: Refresh all mountpoints
+      ansible.builtin.mount_facts:
+        include_aggregate_mounts: true
+        sources: all
     - name: Binding virtual file systems
-      ansible.builtin.command:
-        cmd: "mount {{ item.options }} {{ item.source }} {{ item.target }}"
-      # register: cmd_output
-      # changed_when: cmd_output.rc == 0
-      args:
-        creates: "{{ item.target }}"
+      ansible.posix.mount:
+        path: "{{ item.target }}"
+        src: "{{ item.source }}"
+        fstype: "{{ item.fstype }}"
+        opts: "{{ item.options }}"
+        state: ephemeral
       loop:
-        - { options: '-t proc', source: '/proc', target: '{{ live_cd_mountpoint }}/proc' }
-        - { options: '-t sysfs', source: 'sys', target: '{{ live_cd_mountpoint }}/sys' }
-        - { options: '-B', source: '/dev', target: '{{ live_cd_mountpoint }}/dev' }
-        - { options: '-t devpts', source: 'pts', target: '{{ live_cd_mountpoint }}/dev/pts' }
+        - { options: '',     fstype: 'proc',   source: '/proc', target: '{{ live_cd_mountpoint }}/proc'}
+        - { options: '',     fstype: 'sysfs',  source: 'sys',   target: '{{ live_cd_mountpoint }}/sys'}
+        - { options: 'bind', fstype: '',       source: '/dev',  target: '{{ live_cd_mountpoint }}/dev'}
+        - { options: '',     fstype: 'devpts', source: 'pts',   target: '{{ live_cd_mountpoint }}/dev/pts'}
+      when:
+        - item.target not in ansible_facts['mount_points']
+
 
     ###############################################################################
     # [ Apply APT-Cacher-NG Configuration ]########################################
@@ -182,5 +199,33 @@
         - "useradd -G sudo -u {{ getent_passwd['ansible'].1 }} -s /bin/bash --create-home --home-dir /tmphomes/ansible ansible"
         - "echo \"ansible:ansible\" | chpasswd"
         - "echo \"ansible ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers.d/99_sudo_include_file"
+
+    - name: Copy SSH Server Keys into chroot
+      ansible.builtin.copy: 
+        dest: "{{ live_cd_mountpoint }}/etc/ssh/{{ item.name }}"
+        src: "/etc/ssh/{{ item.name }}"
+        remote_src: true
+        mode: "{{ item.permission }}"
+        owner: root
+        group: root
+      loop:
+        - { name: 'ssh_host_ecdsa_key', permission: '600' }
+        - { name: 'ssh_host_ecdsa_key.pub', permission: '644' }
+        - { name: 'ssh_host_ed25519_key', permission: '600' }
+        - { name: 'ssh_host_ed25519_key.pub', permission: '644' }
+        - { name: 'ssh_host_rsa_key', permission: '600' }
+        - { name: 'ssh_host_rsa_key.pub', permission: '644' }
+
+    - name: Copy SSH User Keys for User "ansible"
+      ansible.builtin.copy: 
+        dest: "{{ live_cd_mountpoint }}/tmphomes/ansible/.ssh/"
+        src: "/home/ansible/.ssh/{{ item.name }}"
+        remote_src: true
+        mode: "{{ item.permission }}"
+        owner: ansible
+        group: ansible
+      loop:
+        - { name: 'authorized_keys', permission: '600' }
+
 
 ###############################################################################

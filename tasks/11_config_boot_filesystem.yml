@@ -80,25 +80,18 @@
     - config_boot_fs
   block:
 
-    - name: Run chroot command to install dosfstool
-      ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c 'apt-get install --yes dosfstools'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      when:
-        - ansible_os_family == "Debian"
-
     - name: Create EFI filesystem on boot device
-      ansible.builtin.command:
-        cmd: "mkfs.vfat -v -F 32 -s 1 -n BOOT_EFI {{ boot_dev_name }}"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+      community.general.filesystem:
+        dev: "{{ boot_dev_name }}"
+        fstype: "vfat"
+        opts: "-F 32 -s 1 -n BOOT_EFI"
+        state: present
 
-    - name: Run chroot command to create /boot/efi directory
-      ansible.builtin.command:
-        "{{ chroot_cmd }} bash -c 'mkdir -p {{ efi_boot_mountpoint }}'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    - name: Create /boot/efi directory
+      ansible.builtin.file:
+        path: "{{ efi_boot_mountpoint }}"
+        state: directory
+        mode: '0755'
 
 ###############################################################################
 # [ Build up fstab file ]######################################################
@@ -112,27 +105,46 @@
     # Entries would only exist if this task had been run previously
     - name: Remove any existing /boot/efi references from fstab
       ansible.builtin.replace:
-        path: "{{ live_cd_mountpoint }}/etc/fstab"
+        path: "/etc/fstab"
         regexp: '(?m)^/dev/disk/by-uuid/.*/boot/efi.*\n?'
         replace: ''
 
     - name: Remove UNCONFIGURED message in /etc/fstab
       ansible.builtin.blockinfile:
-        path: "{{ live_cd_mountpoint }}/etc/fstab"
+        path: "/etc/fstab"
         marker: "# UNCONFIGURED FSTAB FOR BASE SYSTEM"
         block: ""
 
-    - name: Add EFI Filesystems to /etc/fstab
-      ansible.builtin.shell:
-        cmd: >
-          echo /dev/disk/by-uuid/$(blkid -s UUID -o value "{{ boot_dev_name }}")
-          /boot/efi vfat nofail,x-systemd.device-timeout=1,x-systemd.after=zfs-mount.service 0 1 >>"{{ live_cd_mountpoint }}/etc/fstab"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    - name: Get Boot Device UUID
+      ansible.builtin.command:
+        cmd: "blkid -s UUID -o value \"{{ boot_dev_name }}\""
+      register: boot_dev_uuid
+      changed_when: boot_dev_uuid.rc == 0
+      failed_when: boot_dev_uuid.stdout == ''
+
+    - name: Mount /boot/efi and configure fstab
+      ansible.posix.mount:
+        boot: true
+        dump: 0
+        fstype: vfat
+        opts: nofail,x-systemd.device-timeout=1,x-systemd.after=zfs-mount.service
+        passno: 1
+        path: /boot/efi
+        src: "/dev/disk/by-uuid/{{ boot_dev_uuid.stdout }}"
+        # src: "{{ (disk_by_id | length | int > 1) | ternary(boot_dev_name, boot_dev_path_single.stdout) }}"
+        state: mounted
+
+    # - name: Add EFI Filesystems to /etc/fstab
+    #   ansible.builtin.shell:
+    #     cmd: >
+    #       echo /dev/disk/by-uuid/$(blkid -s UUID -o value "{{ boot_dev_name }}")
+    #       /boot/efi vfat nofail,x-systemd.device-timeout=1,x-systemd.after=zfs-mount.service 0 1 >>"/etc/fstab"
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
 
     - name: Debug get contents of chroot /etc/fstab
       ansible.builtin.command:
-        cmd: "cat {{ live_cd_mountpoint }}/etc/fstab"
+        cmd: "cat /etc/fstab"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       when:
@@ -145,10 +157,14 @@
         debug | default(false)
 
     # Mount /boot/efi directory in chroot environment
-    - name: Run chroot command to mount /boot/efi directory
-      ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c 'mount {{ efi_boot_mountpoint }}'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    # - name: Mount /boot/efi directory
+    #   ansible.posix.mount:
+    #     path: "{{ efi_boot_mountpoint }}"
+    #     state: "remounted"
+    # - name: Run command to mount /boot/efi directory
+    #   ansible.builtin.command:
+    #     cmd: "mount {{ efi_boot_mountpoint }}"
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
 
 ###############################################################################

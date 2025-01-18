@@ -209,7 +209,7 @@
       "ERROR: "
   when:
     - create_lvm_partition | bool
-    - lvm_partition_size | regex_search('[0-9]+') | int != 0 
+    - lvm_partition_size | regex_search('[0-9]+') | int != 0
     - (root_partition_size | regex_search('[0-9]+') | int < lvm_partition_size | regex_search('[0-9]+') | int) or
       (root_partition_size | regex_search('[0-9]+') | int == 0 )
   tags:
@@ -306,6 +306,7 @@
     - name: Confirmed UEFI Firmware detected
       ansible.builtin.set_fact:
         use_uefi_booting_msg: "Confirmed UEFI Firmware found"
+        uefi_mode: true
       when:
         - efi_firmware_directory.stat.isdir is defined and efi_firmware_directory.stat.isdir
 
@@ -313,6 +314,7 @@
     - name: UEFI not detected, switch to Legacy BIOS Install
       ansible.builtin.set_fact:
         use_uefi_booting_msg: "UEFI Firmware Not Detected, using Legacy BIOS instead"
+        uefi_mode: false
       when:
         - efi_firmware_directory.stat.isdir is undefined
 

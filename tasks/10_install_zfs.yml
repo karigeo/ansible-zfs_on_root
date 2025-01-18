@@ -18,7 +18,7 @@
         - ansible_os_family == "Debian"
 
     - name: Ensure ZFS update rebuilds all initramfs
-      copy:
+      ansible.builtin.copy:
         dest: /etc/dkms/zfs.conf
         content: REMAKE_INITRD=yes
         mode: '0644'
@@ -26,23 +26,18 @@
     - name: Install further required Software and ZFS into chroot
       ansible.builtin.apt:
         name:
-          - console-setup
-          - locales
-          - dpkg-dev
           - linux-headers-generic
           - linux-image-generic
           - dropbear-initramfs
-          - mdadm
           - wget
           - nano
           - vim
-          - openssh-server
-          - sudo
           - bridge-utils
           - lvm2
           - zfsutils-linux
           - zfs-zed
           - zfs-initramfs
+          - zfs-dkms
         install_recommends: false
       when:
         - ansible_os_family == "Debian"
@@ -63,8 +58,8 @@
         state: absent
         path: "{{ item }}"
       loop:
-        - "{{ live_cd_mountpoint }}/boot/vmlinuz.old"
-        - "{{ live_cd_mountpoint }}/boot/initrd.img.old"
+        - "/boot/vmlinuz.old"
+        - "/boot/initrd.img.old"
 
     - name: Ensure cachefile exists
       ansible.builtin.command:
@@ -73,7 +68,7 @@
       changed_when: cmd_output.rc == 0
       with_items:
         - "zpool set cachefile=/etc/zfs/zpool.cache {{ root_pool_name }}"
-    
+
     - name: Ensure zfs-import-cache is active
       ansible.builtin.systemd_service:
         name: "{{ item }}"

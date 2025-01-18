@@ -46,6 +46,20 @@
         two_root_pool_devices: "{{ two_root_pool_devices | default([]) + [device_list[item | int]] }}"
       with_sequence: start=0 end=1
 
+    ###############
+    # TODO: When encypted with LUKS, the addendum "root_partition_name_suffix" must not be used
+    # IDEA: Maybe use "set_fact" to just set "root_partition_name_suffix" as empty. Seems to be dirty somehow.
+    ###############
+    - name: Clear root_partition_name_suffix
+      ansible.builtin.set_fact:
+        root_partition_name_suffix: "{{ root_partition_name_suffix if disk_encryption_type == 'native' or disk_encryption_type == 'none' else '' if disk_encryption_type == 'luks' }}"
+
+    - name: Debug root_partition_name_suffix
+      ansible.builtin.debug:
+        msg: "root_partition_name_suffix has value: {{ root_partition_name_suffix }}"
+      when:
+        - debug|default(false)
+
     - name: Debug Create Mirrored vdev ZFS Root Pool
       ansible.builtin.debug:
         msg: >
