@@ -81,4 +81,18 @@
         state: present
         update_cache: true
 
+- name: Generate ZFS hostid
+  when:
+    - ansible_os_family == "Debian"
+    - ansible_distribution == "Debian"
+  tags:
+    - install-zfs-packages
+  block:
+    - name: Run command to generate ZFS hostid
+      ansible.builtin.command:
+        cmd: zgenhostid -f
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+  
+
 ###############################################################################

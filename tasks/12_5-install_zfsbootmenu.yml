@@ -1,59 +1,216 @@
 ---
 # [ Install ZFS Boot Menu ]##############################################
+# [ Block to handle keyfile for autoencryption with native encryption] ##
+- name: Create keyfiles for ZFS native encrypted partitions to be used during boot
+  when: 
+    - ansible_nodename != "localhost"
+    - disk_encryption_type == "native"
+  tags:
+    - install_zfsbootmenu
+  block:
+    - name: Store encryption password in keyfile
+      ansible.builtin.copy:
+        dest: "/etc/zfs/{{ root_pool_name }}.key"
+        content: |
+          {{ passphrase }}
+        force: true
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Tell ZFS to to use the generated keyfile
+      ansible.builtin.command:
+        cmd: "zfs change-key -o keylocation=file:///etc/zfs/{{ root_pool_name }}.key -o keyformat=passphrase {{ root_pool_name }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+
+    - name: Set keysource for zbm key caching (to not have to enter passwords multiple times during boot)
+      ansible.builtin.command:
+        cmd: "zfs set org.zfsbootmenu:keysource=\"{{ root_pool_name }}/ROOT\" {{ root_pool_name }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+
+# [ Block to handle keyfile for autoencryption with luks encryption] ####
+# Further Info: https://askubuntu.com/questions/996155/how-do-i-automatically-decrypt-an-encrypted-filesystem-on-the-next-reboot
+- name: Create keyfiles for luks encrypted partitions to be used during boot
+  when: 
+    - ansible_nodename != "localhost"
+    - disk_encryption_type == "luks"
+  tags:
+    - install_zfsbootmenu
+  block:
+    - name: Install package cryptsetup
+      ansible.builtin.apt:
+        name: 
+          - cryptsetup
+          - cryptsetup-initramfs
+        state: present
+
+    - name: Create directory to hold the key files
+      ansible.builtin.file:
+        path: /etc/cryptsetup-keys.d/
+        state: directory
+        mode: '0700'
+
+    - name: Create random key for root pool
+      community.general.filesize:
+        path: /etc/cryptsetup-keys.d/{{ root_pool_name }}.key
+        source: /dev/urandom
+        blocksize: 1024
+        size: 4
+        #force: true
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Add new keys to root containers on each disk
+      community.crypto.luks_device:
+        device: "{{ item }}-part{{ root_partition }}"
+        passphrase: "{{ passphrase }}"
+        new_keyfile: "/etc/cryptsetup-keys.d/{{ root_pool_name }}.key"
+      loop: "{{ disk_by_id }}"
+
+    - name: Query UUIDs for root partiton container devices
+      ansible.builtin.command: 
+        cmd: "blkid -s UUID -o value {{ disk_by_id | product(['-part' + root_partition + ' ']) | map('join') | join(' ')}}"
+      register: cmd_output
+      changed_when:
+        cmd_output.rc == 0
+
+    - name: Write UUIDs into list variable
+      ansible.builtin.set_fact:
+        root_partition_uuids: "{{ cmd_output.stdout | split('\n') | list}}"
+
+    # Read here: https://cryptsetup-team.pages.debian.net/cryptsetup/README.initramfs.html
+    - name: Generate crypttab entries
+      ansible.builtin.lineinfile:
+        path: /etc/crypttab
+        search_string: "crypt_{{ item | regex_search('([^\/]+$)') }}_root"
+        line: "crypt_{{ item | regex_search('([^\/]+$)') }}_root UUID={{ root_partition_uuids[ansible_loop.index0] }} /etc/cryptsetup-keys.d/{{ root_pool_name }}.key luks,discard,initramfs"
+        state: present
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - "{{ disk_by_id }}"
+      loop_control:
+        extended: true
+
+    - name: Configure Keyfile Pattern for cryptsetup-initramfs
+      ansible.builtin.lineinfile:
+        path: /etc/cryptsetup-initramfs/conf-hook
+        regexp: '^(#+KEYFILE_PATTERN=|KEYFILE_PATTERN=)'
+        line: "KEYFILE_PATTERN=\"/etc/cryptsetup-keys.d/*.key\""
+        state: present
+        owner: root
+        group: root
+        mode: '0644'
+
+# [ Block for tasks that have to be done for both enryption methods] ####
+- name: Run tasks that have to be done for both enryption methods
+  when: 
+    - ansible_nodename != "localhost"
+    - disk_encryption_type != "none"
+  tags:
+    - install_zfsbootmenu
+  block:
+    - name: Set UMASK for initramfs images
+      ansible.builtin.copy:
+        dest: "/etc/initramfs-tools/conf.d/umask.conf"
+        content: |
+          UMASK=0077
+        force: true
+        owner: root
+        group: root
+        mode: '0644'
+
+# [Proceed with actual ZBM Installation] ################################
 - name: Install ZFS Boot Menu Block
   when:
     - ansible_nodename != "localhost"
   tags:
     - install_zfsbootmenu
   block:
-    - name: Run chroot command to install ZFS Boot Menu
-      ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      with_items:
-        - "DEBIAN_FRONTEND=noninteractive apt-get --yes install kexec-tools"
-        - "apt-get --yes install libconfig-inifiles-perl libsort-versions-perl libboolean-perl libyaml-pp-perl fzf mbuffer make curl"
-      when:
-        - ansible_os_family == "Debian"
+    - name: Install required packages for ZBM - with recommends
+      ansible.builtin.apt:
+        name: 
+          - kexec-tools
+          - bsdextrautils
+          - mbuffer
+          - curl
 
+    - name: Install required packages for ZBM - without recommends
+      ansible.builtin.apt:
+        name: 
+          - libconfig-inifiles-perl
+          - libsort-versions-perl
+          - libboolean-perl
+          - libyaml-pp-perl
+          - fzf
+          - make
+          - git
+          - dracut-core
+        install_recommends: false
+        
     # Assign command-line arguments to be used when booting the final kernel
-    - name: Run chroot command to assign arguments when booting kernel
+    - name: Get current hostid
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: hostid
+      register: hostid
+      changed_when: hostid.rc == 0
+      failed_when: hostid.stdout | length == 0
+
+    - name: Run commands to assign arguments when booting kernel
+      ansible.builtin.command:
+        cmd: "{{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
-        - 'zfs set org.zfsbootmenu:commandline="rw" {{ root_pool_name }}/ROOT'
-        - 'zfs set org.zfsbootmenu:commandline="rw" {{ root_pool_dataset_path }}'
+        - 'zfs set org.zfsbootmenu:commandline="spl_hostid={{ hostid.stdout }} rw" {{ root_pool_name }}/ROOT'
+        - 'zfs set org.zfsbootmenu:commandline="spl_hostid={{ hostid.stdout }} rw" {{ root_pool_dataset_path }}'
         - 'zfs set canmount=noauto {{ root_pool_name }}/ROOT'
         - 'zfs set canmount=noauto {{ root_pool_dataset_path }}'
 
-    ###########################################################################
-    # [ Install ZFS Boot Menu git repo and build locally ]#####################
-    - name: Run chroot command to Install ZFS Boot Menu git repo and build
-      ansible.builtin.shell: # noqa command-instead-of-shell
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      with_items:
-        - "rm -rf /tmp/zfsbootmenu && mkdir -p /tmp/zfsbootmenu"
-        - "cd /tmp/zfsbootmenu && curl -L https://get.zfsbootmenu.org/source | tar xz --strip=1 && make install"
-        # This seems to fail sometimes - gets killed during install (use libyaml-pp-perl package instead)
-        # - "cd /tmp/zfsbootmenu && PERL_MM_USE_DEFAULT=1 cpan 'YAML::PP'"
-        # Create pre and post hooks dirs and syslinux snippets dir
-        - "mkdir -p /etc/zfsbootmenu/generate-zbm.pre.d"
-        - "mkdir -p /etc/zfsbootmenu/generate-zbm.post.d"
-        - "mkdir -p {{ efi_boot_mountpoint }}/snippets"
-        # Copy syslinux-update.sh script
-        - "cp /tmp/zfsbootmenu/contrib/syslinux-update.sh /etc/zfsbootmenu/generate-zbm.post.d"
-        - "chmod +x /etc/zfsbootmenu/generate-zbm.post.d/syslinux-update.sh"
+    - name: Create directory for ZBM source
+      ansible.builtin.file:
+        path: /usr/local/src/zfsbootmenu/
+        state: directory
+
+    - name: Fetch ZBM source from GIT
+      ansible.builtin.git:
+        clone: true
+        repo: https://github.com/zbm-dev/zfsbootmenu
+        dest: /usr/local/src/zfsbootmenu/
+        force: true
+
+    - name: Compile ZBM Targets "core" and "dracut"
+      community.general.make:
+        chdir: /usr/local/src/zfsbootmenu/
+        targets: ['core', 'dracut']
+        
+    ######################################################################
+    # [ Prepare Pre and Post Hooks for generate-zbm ]#####################
+    - name: Create pre and post hooks dirs and syslinux snippets dir
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "/etc/zfsbootmenu/generate-zbm.pre.d/"
+        - "/etc/zfsbootmenu/generate-zbm.post.d/"
+        - "{{ efi_boot_mountpoint }}/snippets/"
+
+    - name: Copy syslinux-update.sh script
+      ansible.builtin.copy: 
+        src: "/usr/local/src/zfsbootmenu/contrib/syslinux-update.sh"
+        remote_src: true
+        dest: "/etc/zfsbootmenu/generate-zbm.post.d/"
+        mode: '0755'
 
     # Modify syslinux-update.sh script to let generate-zbm create a valid
     # syslinux.cfg that can also include memtest86 snippet
     - name: Modify syslinux-update.sh
       ansible.builtin.replace:
-        path: "{{ live_cd_mountpoint }}/etc/zfsbootmenu/generate-zbm.post.d/syslinux-update.sh"
+        path: "/etc/zfsbootmenu/generate-zbm.post.d/syslinux-update.sh"
         regexp: '{{ find_values.regexp }}'
         replace: '{{ find_values.replace }}'
       loop:
@@ -64,11 +221,32 @@
       loop_control:
         loop_var: find_values
 
+    - name: Create directories for ZBM boot hooks
+      when: disk_encryption_type == "luks"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+       - '/etc/zfsbootmenu/hooks/early-setup.d/'
+       - '/etc/zfsbootmenu/hooks/boot-sel.d/'
+
+    # Install Hooks for LUKS encrytion in place: 
+    - name: Fetch ZBM hook scripts and put them in place
+      when: disk_encryption_type == "luks"
+      ansible.builtin.get_url:
+        url: "{{ item.url }}"
+        dest: "{{ item.dest }}"
+        mode: "{{'0755' if item.exe else '0644'}}"
+      loop:
+       - { url: 'https://raw.githubusercontent.com/agorgl/zbm-luks-unlock/master/hooks/early-setup.d/luks-unlock.sh',   dest: '/etc/zfsbootmenu/hooks/early-setup.d/', exe: true }
+       - { url: 'https://raw.githubusercontent.com/agorgl/zbm-luks-unlock/master/hooks/boot-sel.d/initramfs-inject.sh', dest: '/etc/zfsbootmenu/hooks/boot-sel.d/',    exe: true }
+       - { url: 'https://raw.githubusercontent.com/agorgl/zbm-luks-unlock/master/dracut.conf.d/99-crypt.conf',          dest: '/etc/zfsbootmenu/dracut.conf.d/',       exe: false }
+
     # Configure ZFSBootMenu
     - name: Copy ZFSBootMenu Config template to /mnt/etc/zfsbootmenu/config.yaml
       ansible.builtin.template:
         src: zfsbootmenu_config.yaml.j2
-        dest: "{{ live_cd_mountpoint }}/etc/zfsbootmenu/config.yaml"
+        dest: "/etc/zfsbootmenu/config.yaml"
         owner: "root"
         group: "root"
         mode: "0644"
@@ -77,41 +255,50 @@
     - name: Copy Header for syslinux.cfg template to /boot/efi/snippets/01_header
       ansible.builtin.template:
         src: snippets_01_header.j2
-        dest: "{{ live_cd_mountpoint }}{{ efi_boot_mountpoint }}/snippets/01_header"
+        dest: "{{ efi_boot_mountpoint }}/snippets/01_header"
         owner: "root"
         group: "root"
         mode: "0644"
 
-    # Download and install memtest86
-    # EFI version is latest v10, syslinux version is v4
-    - name: Run chroot command to download and install memtest86
-      ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      with_items:
-        - "rm -rf /tmp/memtest86 && mkdir -p /tmp/memtest86/mnt"
-        - "mkdir -p {{ efi_boot_path }}/tools/memtest86"
-        - "curl -L https://www.memtest86.com/downloads/memtest86-usb.zip -o /tmp/memtest86/memtest86-usb.zip"
-        - "curl -L https://www.memtest86.com/downloads/memtest86-4.3.7-iso.zip -o /tmp/memtest86/memtest86-iso.zip"
-        # For EFI
-        - "unzip -d /tmp/memtest86 /tmp/memtest86/memtest86-usb.zip memtest86-usb.img"
-        - "losetup -P /dev/loop33 /tmp/memtest86/memtest86-usb.img"
-        - "mount -o loop /dev/loop33p1 /tmp/memtest86/mnt"
-        - "cp /tmp/memtest86/mnt/EFI/BOOT/BOOTX64.efi {{ efi_boot_path }}/tools/memtest86/memtest86.efi"
-        - "umount /tmp/memtest86/mnt"
-        - "losetup -d /dev/loop33"
-        # For Syslinux
-        - "unzip -d /tmp/memtest86 /tmp/memtest86/memtest86-iso.zip Memtest86-4.3.7.iso"
-        - "mount -o loop /tmp/memtest86/Memtest86-4.3.7.iso /tmp/memtest86/mnt"
-        - "cp /tmp/memtest86/mnt/isolinux/memtest {{ efi_boot_path }}/tools/memtest86/memtest86.syslinux"
-        - "umount /tmp/memtest86/mnt"
+    # # Download and install memtest86
+    # # EFI version is latest v10, syslinux version is v4
+    # - name: Run commands to download and install memtest86
+    #   ansible.builtin.command:
+    #     cmd: "{{ item }}"
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
+    #   with_items:
+    #     - "rm -rf /tmp/memtest86 && mkdir -p /tmp/memtest86/mnt"
+    #     - "mkdir -p {{ efi_boot_path }}/tools/memtest86"
+    #     - "curl -L https://www.memtest86.com/downloads/memtest86-usb.zip -o /tmp/memtest86/memtest86-usb.zip"
+    #     - "curl -L https://www.memtest86.com/downloads/memtest86-4.3.7-iso.zip -o /tmp/memtest86/memtest86-iso.zip"
+    #     # For EFI
+    #     - "unzip -d /tmp/memtest86 /tmp/memtest86/memtest86-usb.zip memtest86-usb.img"
+    #     - "losetup -P /dev/loop33 /tmp/memtest86/memtest86-usb.img"
+    #     - "mount -o loop /dev/loop33p1 /tmp/memtest86/mnt"
+    #     - "cp /tmp/memtest86/mnt/EFI/BOOT/BOOTX64.efi {{ efi_boot_path }}/tools/memtest86/memtest86.efi"
+    #     - "umount /tmp/memtest86/mnt"
+    #     - "losetup -d /dev/loop33"
+    #     # For Syslinux
+    #     - "unzip -d /tmp/memtest86 /tmp/memtest86/memtest86-iso.zip Memtest86-4.3.7.iso"
+    #     - "mount -o loop /tmp/memtest86/Memtest86-4.3.7.iso /tmp/memtest86/mnt"
+    #     - "cp /tmp/memtest86/mnt/isolinux/memtest {{ efi_boot_path }}/tools/memtest86/memtest86.syslinux"
+    #     - "umount /tmp/memtest86/mnt"
 
     # Syslinux entry for memtest86+
     - name: Copy Header for syslinux.cfg template to /boot/efi/snippets/05_memtest86
       ansible.builtin.template:
         src: snippets_05_memtest86.j2
-        dest: "{{ live_cd_mountpoint }}{{ efi_boot_mountpoint }}/snippets/05_memtest86"
+        dest: "{{ efi_boot_mountpoint }}/snippets/05_memtest86"
         owner: "root"
         group: "root"
         mode: "0644"
+
+    - name: Run commands to update initramfs and generate ZBM
+      ansible.builtin.command:
+        cmd: "{{ item }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      loop:
+        - "update-initramfs -c -k all"
+        - "generate-zbm --debug"

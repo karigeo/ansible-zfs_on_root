@@ -8,7 +8,9 @@
   block:
     - name: Install rEFInd Boot Manager
       ansible.builtin.apt:
-        name: refind
+        name: 
+          - refind
+          - git
         state: present
       when:
         - ansible_os_family == "Debian"
@@ -66,34 +68,29 @@
         regexp: '^timeout .*'
         replace: 'timeout {{ refind_boot_menu_timeout }}'
 
-    - name: Copy Logo Images and Icons
-      ansible.builtin.copy:
-        src: "files/{{ item.source }}"
-        dest: "{{ item.dest }}"
-        owner: "root"
-        group: "root"
-        mode: "0644"
-      with_items:
-        - { source: "logo.jpg", dest: "{{ refind_path }}/" }
-        - { source: "os_linux.png", dest: "{{ refind_path }}/icons/"}
-      when:
-        - refind_boot_menu_logo  | default(false)
+    - name: Create directory for rEFInd theme
+      ansible.builtin.file: 
+        state: directory
+        path: "{{ refind_path }}/themes/refind-ambience/"
+        owner: root
+        group: root
+        
+    - name: Fetch rEFInd theme
+      ansible.builtin.git:
+        clone: true
+        repo: https://github.com/karigeo/refind-ambience
+        dest: "{{ refind_path }}/themes/refind-ambience"
+        version: master
+        force: true
 
-    - name: Enable banner_scale for Logo Images
-      ansible.builtin.replace:
+    - name: Config rEFInd to use theme
+      ansible.builtin.lineinfile:
         path: "{{ refind_path }}/refind.conf"
-        regexp: '^#banner_scale (.*$)'
-        replace: 'banner_scale \1'
-      when:
-        - refind_boot_menu_logo  | default(false)
-
-    - name: Set Banner Logo Images
-      ansible.builtin.replace:
-        path: "{{ refind_path }}/refind.conf"
-        regexp: '^#banner hostname.bmp(.*$)'
-        replace: 'banner logo.jpg'
-      when:
-        - refind_boot_menu_logo  | default(false)
+        line: "include themes/refind-ambience/theme.conf"
+        state: present
+        owner: root
+        group: root
+        mode: '0644'
 
     - name: Copy startup script with multiple disks template to /boot/efi/startup.nsh
       ansible.builtin.template:

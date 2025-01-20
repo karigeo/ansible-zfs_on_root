@@ -27,6 +27,12 @@
       args:
         creates: "{{ live_cd_mountpoint }}/etc/passwd"
 
+    - name: Copy ZFS hostid
+      ansible.builtin.copy:
+        src: /etc/hostid
+        remote_src: true
+        dest: "{{ live_cd_mountpoint }}/etc/hostid"
+
     - name: Disable ZFS Device Node support
       ansible.builtin.command:
         "zfs set devices=off {{ root_pool_name }}"

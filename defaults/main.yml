@@ -12,7 +12,7 @@ no_log_secrets: false
 # This is a temporary root password used during the build process.
 # Root password will be disabled during the final stages.
 # The non-root user account will have sudo privileges
-default_root_password: "change!me"
+default_root_password: "root"
 
 # Define non-root user account(s) to create (home drives will be its own dataset)
 # Each user will be required to change password upon first login
@@ -110,7 +110,7 @@ ipv6:
 # address_type can be "manual" "static" or "dhcp"
 ipv4:
   iface:
-    name: enp2s1
+    name: ens1
     address_type: manual
     network_address: none
     gateway: none

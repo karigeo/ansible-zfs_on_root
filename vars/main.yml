@@ -7,7 +7,7 @@ debug: true
 # Distro Release name
 distro_release: "bookworm"
 distro_name: "debian"
-distro_version: "12.8"
+distro_version: "12.9"
 
 # Define Partition Mapping
 boot_partition: "1"

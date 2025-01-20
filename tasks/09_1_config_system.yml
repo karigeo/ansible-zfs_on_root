@@ -85,6 +85,13 @@
         value: UTC
         vtype: select
       notify: reconf tzdata
+    
+    # https://serverfault.com/questions/539911/setting-debconf-selections-for-keyboard-configuration-fails-layout-ends-up-as
+    # Delete the keyboard config file before running dpkg-reconfigure. Otherwise config file will not be updated and will stay as "us" default.
+    - name: Remove exisiting /etc/default/keyboard
+      ansible.builtin.file:
+        path: /etc/default/keyboard
+        state: absent
 
     - name: Set keyboard model
       ansible.builtin.debconf:

@@ -6,54 +6,10 @@
   tags:
     - system_tweaks
   block:
-    - name: Setup /tmp to use tmpfs
-      ansible.builtin.copy:
-        src: "{{ live_cd_mountpoint }}/usr/share/systemd/tmp.mount"
-        dest: "{{ live_cd_mountpoint }}/etc/systemd/system/tmp.mount"
-        mode: "0644"
-        remote_src: true
-
-    - name: Run chroot command enable /tmp
-      ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c 'systemctl enable tmp.mount'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-
-    - name: Run chroot commands to add system groups
-      ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      with_items:
-        - "addgroup --system lpadmin"
-        - "addgroup --system lxd"
-        - "addgroup --system sambashare"
-
-    - name: Create /etc/skel/.ssh directory
-      ansible.builtin.file:
-        path: "{{ live_cd_mountpoint }}/etc/skel/.ssh"
-        mode: "0700"
-        state: directory
-
-    - name: Run chroot command to install basic applications
-      ansible.builtin.command:
-        "{{ chroot_cmd }} bash -c 'apt-get install --yes openssh-server avahi-daemon libnss-mdns python3 python3-apt'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      when:
-        - ansible_os_family == "Debian"
-
-    - name: Copy Avahi SSH service file into place
-      ansible.builtin.copy:
-        src: "{{ live_cd_mountpoint }}/usr/share/doc/avahi-daemon/examples/ssh.service"
-        dest: "{{ live_cd_mountpoint }}/etc/avahi/services"
-        mode: "0644"
-        remote_src: true
-
     - name: Install ZFS Service Templates
       ansible.builtin.template:
         src: "{{ item }}.j2"
-        dest: "{{ live_cd_mountpoint }}/etc/systemd/system/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
         owner: root
         group: root
         mode: '0644'
@@ -63,9 +19,9 @@
         - zpool-scrub@.service  # ZFS zpool scrub service
         - zpool-scrub@.timer    # ZFS zpool scrub service timer unit
 
-    - name: Run chroot commands to enable ZFS Trim Services
+    - name: Run commands to enable ZFS Trim Services
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: "{{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
@@ -74,9 +30,9 @@
       when:
         - zfs_pool_trim_systemd_service_enable | default( false) | bool
 
-    - name: Run chroot commands to enable ZFS Scrub Service
+    - name: Run commands to enable ZFS Scrub Service
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: "{{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
@@ -90,6 +46,7 @@
 - name: ZFS Encryption Unlock Script and Unit File Block
   when:
     - root_pool_encryption | default(false)
+    - disk_encryption_type == "native"
     - ansible_nodename != "localhost"
   tags:
     - system_tweaks
@@ -97,7 +54,7 @@
     - name: ZFS encryption script to load the keyfile
       ansible.builtin.template:
         src: "zfs-multi-mount.sh.j2"
-        dest: "{{ live_cd_mountpoint }}/usr/bin/zfs-multi-mount.sh"
+        dest: "/usr/bin/zfs-multi-mount.sh"
         owner: root
         group: root
         mode: "755"
@@ -105,16 +62,16 @@
     - name: Install ZFS Service Templates for Encryption
       ansible.builtin.template:
         src: "{{ item }}.j2"
-        dest: "{{ live_cd_mountpoint }}/etc/systemd/system/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
         owner: root
         group: root
         mode: "644"
       with_items:
         - zfs-load-key.service  # ZFS encryption service to load keyfile
 
-    - name: Run chroot commands to enable ZFS load key service
+    - name: Run commands to enable ZFS load key service
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: "{{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:

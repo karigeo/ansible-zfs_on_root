@@ -5,7 +5,7 @@ iface lo inet loopback
 auto {{ ipv4.iface.name }}
 {% endif %}
 iface {{ ipv4.iface.name }} inet {{ ipv4.iface.address_type }}
-{% if ipv4.iface.address_type != 'static' %}
+{% if ipv4.iface.address_type == 'static' %}
         address {{ ipv4.iface.network_address }}
         gateway {{ ipv4.iface.gateway }}
 {% endif %}
@@ -14,7 +14,7 @@ iface {{ ipv4.iface.name }} inet {{ ipv4.iface.address_type }}
 auto {{ ipv4.bridge.name }}
 {% endif %}
 iface {{ ipv4.bridge.name }} inet {{ ipv4.bridge.address_type }}
-{% if ipv4.bridge.address_type != 'static' %}
+{% if ipv4.bridge.address_type == 'static' %}
         address {{ ipv4.bridge.network_address }}
         gateway {{ ipv4.bridge.gateway }}
         bridge-ports {{ ipv4.iface.name }}
