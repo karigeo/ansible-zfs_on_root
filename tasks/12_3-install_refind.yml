@@ -71,26 +71,60 @@
     - name: Create directory for rEFInd theme
       ansible.builtin.file: 
         state: directory
-        path: "{{ refind_path }}/themes/refind-ambience/"
+        path: "{{ refind_path }}/themes/{{ refind_theme_name }}/"
         owner: root
         group: root
         
     - name: Fetch rEFInd theme
       ansible.builtin.git:
         clone: true
-        repo: https://github.com/karigeo/refind-ambience
-        dest: "{{ refind_path }}/themes/refind-ambience"
+        repo: "{{ refind_theme_repo }}"
+        dest: "{{ refind_path }}/themes/{{ refind_theme_name }}"
         version: master
         force: true
 
     - name: Config rEFInd to use theme
       ansible.builtin.lineinfile:
         path: "{{ refind_path }}/refind.conf"
-        line: "include themes/refind-ambience/theme.conf"
+        line: "include themes/{{ refind_theme_name }}/theme.conf"
         state: present
         owner: root
         group: root
         mode: '0644'
+
+    - name: Add custom menuentry for ZBM
+      ansible.builtin.blockinfile:
+        block: |
+          menuentry "ZFSBootMenu" {
+              loader {{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}/vmlinuz-bootmenu
+              initrd {{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}/initramfs-bootmenu.img
+              icon {{ refind_path[ efi_boot_mountpoint | length :] }}/themes/refind-ambience/icons/os_proxmox.png
+          }
+        insertbefore: "include themes"
+        marker: "## {mark} ANSIBLE MANAGED CUSTOM BOOT ENTRY ##"
+        path: "{{ refind_path }}/refind.conf"
+        prepend_newline: true
+        append_newline: true
+
+    - name: Configure display resolution for rEFInd
+      ansible.builtin.lineinfile:
+        path: "{{ refind_path }}/refind.conf"
+        regexp: '^(#+resolution|resolution)'
+        line: "resolution {{ refind_resolution }}"
+        state: present
+      when:
+        - refind_resolution is defined
+        - refind_resolution|length > 0
+    
+    - name: Configure display resolution for rEFInd
+      ansible.builtin.lineinfile:
+        path: "{{ refind_path }}/refind.conf"
+        regexp: '^(#+dont_scan_dirs|dont_scan_dirs)'
+        line: "dont_scan_dirs {{ refind_no_scan_dirs }}"
+        state: present
+      when:
+        - refind_no_scan_dirs is defined
+        - refind_no_scan_dirs|length > 0
 
     - name: Copy startup script with multiple disks template to /boot/efi/startup.nsh
       ansible.builtin.template:

@@ -4,7 +4,7 @@
   when:
     - ansible_nodename != "localhost"
     - enable_swap_partitions|default(true)|bool
-    - not root_pool_encryption|default(false)|bool
+    - disk_encryption_type == "none"
     - disk_by_id | length == 1
   tags:
     - config_swap
@@ -77,7 +77,7 @@
   when:
     - ansible_nodename != "localhost"
     - enable_swap_partitions | default(true) | bool
-    - not root_pool_encryption | default(false) | bool
+    - disk_encryption_type == "none"
     - disk_by_id | length | int > 1
   tags:
     - config_swap
@@ -97,7 +97,7 @@
   when:
     - ansible_nodename != "localhost"
     - enable_swap_partitions|default(true)|bool
-    - root_pool_encryption|default(false)|bool
+    - disk_encryption_type == "luks" or disk_encryption_type == "native"
   tags:
     - config_swap
   block:

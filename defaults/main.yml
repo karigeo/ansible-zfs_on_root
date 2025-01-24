@@ -32,8 +32,20 @@ domain_name: "localdomain"
 # rEFInd Boot Menu Timeout by default is 20 seconds.
 refind_boot_menu_timeout: "10"
 
+# Specify rEFInd display resolution to use (width height)
+# Default is "0 0", which sets system default resolution
+# "max" tries to set the maximum possible resolution
+refind_resolution: "1920 1080"
+
 # Enables background image for refind / syslinux (see files/logo.jpg)
-refind_boot_menu_logo: false
+# ATTENTION: file "theme.conf" has to be placed in the themes folder to configure the skin!
+refind_theming: true
+refind_theme_name: refind-ambience
+refind_theme_repo: https://github.com/karigeo/refind-ambience
+
+# Specify dirs, which should not be scanned by rEFInd: 
+# (comma separated list)
+refind_no_scan_dirs: "{{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}"
 
 # For Full GUI Desktop installation (set to false) or command-line only server
 # environment (set to true)
@@ -126,7 +138,7 @@ ipv4:
 # Swap Partition Settings
 ###############################################################################
 # Create Swap Partitions
-enable_swap_partitions: false
+enable_swap_partitions: true
 
 # Swap partition size when one or two devices are used
 single_or_mirror_swap_partition_size_mb: "4096"

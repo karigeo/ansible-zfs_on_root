@@ -54,12 +54,11 @@
 
     - name: Copy Logo Images and Icons
       ansible.builtin.copy:
-        src: "files/{{ item.source }}"
-        dest: "{{ item.dest }}"
+        src: "{{ refind_path }}/themes/{{ refind_theme_name }}/background.png"
+        dest: "{{ syslinx_path }}/"
+        remote_src: true
         owner: "root"
         group: "root"
         mode: "0644"
-      with_items:
-        - { source: "logo_sm.jpg", dest: "{{ syslinx_path }}/" }
       when:
-        - refind_boot_menu_logo  | default(false)
+        - refind_theming  | default(false)
