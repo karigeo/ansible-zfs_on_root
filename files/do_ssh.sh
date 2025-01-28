@@ -48,13 +48,13 @@ gsettings set org.gnome.desktop.media-handling automount false
 # Disable hibernating, suspend, etc on Debian Live CD:
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
-# Run btop and kill it directly after start just to initialize btop.conf
-btop &
-sleep 2
-kill $!
+# # Run btop and kill it directly after start just to initialize btop.conf
+# btop &
+# sleep 2
+# kill $!
 
-# Change Colormode to 256 colors (Truecolor is broken on Mac terminal)
-sed -i "/truecolor/s/\bTrue\b/False/g" ~/.config/btop/btop.conf 
+# # Change Colormode to 256 colors (Truecolor is broken on Mac terminal)
+# sed -i "/truecolor/s/\bTrue\b/False/g" ~/.config/btop/btop.conf 
 
 # See if we are in a terminal or pipe
 if [[ ! -p /dev/stdin ]]; then

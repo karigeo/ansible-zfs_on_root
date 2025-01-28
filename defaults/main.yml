@@ -279,4 +279,4 @@ apply_dropbear_settings:
   # Define the full path to public key(s) you want to include in Dropbear
   # Allow dracut / dropbear use main user authorized_keys for access
   # Note that login to dropbear is "root" regardless of which authorized_keys is used
-  public_key_for_dropbear: "/home/{{ regular_user_accounts[0].user_id }}/.ssh/authorized_keys"
+  public_key_for_dropbear: "/tmphomes/ansible/.ssh/authorized_keys"

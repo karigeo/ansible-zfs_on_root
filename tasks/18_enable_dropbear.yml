@@ -8,36 +8,37 @@
 
     - name: Install Dracut-Network and Dropbear
       ansible.builtin.apt:
-        name: ['dracut-network', 'dropbear-bin']
+        name: ['dracut-network', 'dropbear', 'isc-dhcp-client']
         state: present
       when:
         - ansible_os_family == "Debian"
 
+    - name: Stop and disable dropbear.service
+      ansible.builtin.systemd_service:
+        name: dropbear
+        enabled: false
+        state: stopped
+        
     - name: Remove dracut-crypt-ssh directory
       ansible.builtin.file:
-        path: "/tmp/dracut-crypt-ssh"
+        path: "{{ item }}"
         state: absent
+      loop:
+        - "/tmp/dracut-crypt-ssh/"
+        - "/usr/lib/dracut/modules.d/60crypt-ssh/"
 
-    - name: Create Fresh dracut-crypt-ssh directory
+    - name: Create fresh temporary dracut-crypt-ssh directory
       ansible.builtin.file:
         path: "/tmp/dracut-crypt-ssh"
         state: directory
         mode: "0755"
 
-    - name: Fetch dracut-crypt-ssh repository tarball
-      ansible.builtin.shell: |
-        set -o pipefail
-        cd /tmp/dracut-crypt-ssh
-        curl -L https://github.com/dracut-crypt-ssh/dracut-crypt-ssh/tarball/master | tar xz --strip=1
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-
-    # Comment out all lines containing: inst "$moddir"/helper/
-    - name: Modify dracut module module-setup.sh
-      ansible.builtin.replace:
-        path: "/tmp/dracut-crypt-ssh/modules/60crypt-ssh/module-setup.sh"
-        regexp: '(^.*inst "\$moddir"\/helper\/.*$)'
-        replace: '#\1'
+    - name: Fetch dracut-crypt-ssh source from GIT
+      ansible.builtin.git:
+        clone: true
+        repo: https://github.com/dracut-crypt-ssh/dracut-crypt-ssh.git
+        dest: /tmp/dracut-crypt-ssh/
+        force: true
 
     - name: Create dracut module 60crypt-ssh directory
       ansible.builtin.file:
@@ -52,24 +53,20 @@
         remote_src: true
         mode: "0755"
 
-    # [ Setup Host Keys ]######################################################
-    - name: Create /etc/dropbear/ directory for host keys
+    - name: Remove Makefile and helpers from dracut module 60crypt-ssh
       ansible.builtin.file:
-        path: "/etc/dropbear/"
-        mode: "0755"
-        state: directory
-
-    - name: Create host keys in PEM format
-      ansible.builtin.command:
-        cmd: 'ssh-keygen -t {{ item }} -m PEM -f /etc/dropbear/ssh_host_{{ item }}_key -N ""'
-        creates: "/etc/dropbear/ssh_host_{{ item }}_key"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      with_items:
-        # The dropbear.conf will look for these 3 keys
-        - "rsa"
-        - "ecdsa"
-        - "ed25519"
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/usr/lib/dracut/modules.d/60crypt-ssh/Makefile"
+        - "/usr/lib/dracut/modules.d/60crypt-ssh/helper/"
+    
+    # Comment out all lines containing: inst "$moddir"/helper/
+    - name: Modify dracut module module-setup.sh
+      ansible.builtin.replace:
+        path: "/usr/lib/dracut/modules.d/60crypt-ssh/module-setup.sh"
+        regexp: '(^.*inst "\$moddir"\/helper\/.*$)'
+        replace: '#\1'
 
     # [ Setup Dracut Networking for Dropbear]##################################
 
@@ -84,7 +81,7 @@
         create: true
         mode: "0644"
         state: present
-        backup: true
+        backup: false
       when:
         - not apply_dropbear_settings.remoteaccess_ip_config == "static"
 
@@ -99,18 +96,26 @@
         create: true
         mode: "0644"
         state: present
-        backup: true
+        backup: false
       when:
         - apply_dropbear_settings.remoteaccess_ip_config == "static"
 
-    # [ Add Banner to Dropbear connection ]####################################
+    - name: Config to publish hostname to DHCP server
+      ansible.builtin.lineinfile:
+        path: /usr/lib/dracut/modules.d/35network-legacy/dhclient.conf
+        regexp: '(^.*send fqdn\.fqdn.*$)'
+        line: "send fqdn.fqdn \"{{ host_name }}\";"
+        state: present
+        backup: false
+
+    # [ Add Dropbear welcome messate ]####################################
     - name: Copy dracut network banner to /etc/zfsbootmenu/dracut.conf.d/banner.txt
       ansible.builtin.template:
         src: dracut_banner.txt.j2
         dest: "/etc/zfsbootmenu/dracut.conf.d/banner.txt"
-        owner: "root"
-        group: "root"
-        mode: "0755"
+        owner: root
+        group: root
+        mode: '0755'
 
     - name: Add network banner to dropbear startup parameters
       ansible.builtin.replace:
@@ -121,12 +126,60 @@
     - name: Add network banner to dracut module setup
       ansible.builtin.replace:
         path: "/usr/lib/dracut/modules.d/60crypt-ssh/module-setup.sh"
+        after: '(install\(\) {)'
         regexp: '(^}$)'
         replace: |
             #
             # Copy dropbear welcome banner message
               inst /etc/zfsbootmenu/dracut.conf.d/banner.txt /etc/banner.txt
-            \1
+            }
+
+    # [ Setup Host Keys ]######################################################
+    # We will convert the machine's existing host keys for dropbear to not get the "Host Key Verification Failed" error.
+    - name: Create /etc/dropbear/ directory for host keys
+      ansible.builtin.file:
+        path: "/etc/dropbear/"
+        mode: "0755"
+        state: directory
+
+    - name: Copy SSH Server Keys into temporary location
+      ansible.builtin.copy: 
+        dest: "/tmp/ssh/"
+        src: "/etc/ssh/ssh_host_{{ item }}_key"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+      # The dropbear.conf will look for these 3 keys
+        - "ecdsa"
+        - "ed25519"
+        - "rsa"
+
+    - name: Convert temporary ssh keys to PEM format
+      ansible.builtin.command:
+        cmd: 'ssh-keygen -p -N "" -m PEM -f /tmp/ssh/ssh_host_{{ item }}_key'
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      loop:
+        - "ecdsa"
+        - "ed25519"
+        - "rsa"
+
+    - name: Convert SSH keys to dropbear format
+      ansible.builtin.command:
+        cmd: 'dropbearconvert openssh dropbear /tmp/ssh/ssh_host_{{ item }}_key /etc/dropbear/dropbear_{{ item }}_host_key'
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      loop:
+        - "ecdsa"
+        - "ed25519"
+        - "rsa"
+      
+    - name: Remove temporary key files
+      ansible.builtin.file:
+        path: "/tmp/ssh/"
+        state: absent
 
     # [ Add dracut dropbear config file ]######################################
     - name: Copy dracut dropbear config file to /etc/zfsbootmenu/dracut.conf.d/dropbear.conf
@@ -137,10 +190,14 @@
         group: "root"
         mode: "0644"
 
-    - name: Run Dracut Generate
+    - name: Run generate-zbm
       ansible.builtin.shell: |
-        dracut -f --regenerate-all
-        sleep 2
         generate-zbm --debug
       register: cmd_output
       changed_when: cmd_output.rc == 0
+
+    - name: Debug show output of generate-zbm
+      ansible.builtin.debug:
+        var: cmd_output['stdout']
+      when:
+        debug | default(false)
