@@ -30,6 +30,7 @@
       ansible.builtin.command: "gsettings set org.gnome.desktop.media-handling automount false"
       register: cmd_output
       changed_when: cmd_output.rc == 0
+      ignore_errors: true
 
 - name: Setup SSH Server to allow chroot Connection
   tags:

@@ -122,16 +122,16 @@ ipv6:
 # address_type can be "manual" "static" or "dhcp"
 ipv4:
   iface:
-    name: ens1
+    name: eno1
     address_type: manual
     network_address: none
     gateway: none
   bridge:
     name: vmbr0
     address_type: static
-    network_address: "10.11.50.61/24"
-    gateway: 10.11.50.1
-  dns_nameserver: 10.11.50.1
+    network_address: "10.11.12.227/24"
+    gateway: 10.11.12.1
+  dns_nameserver: 10.11.12.1
   dns_search_domain: intern.bsicloud.de
 
 ###############################################################################
@@ -188,7 +188,7 @@ zfs_compression: "lz4"
 # "+256G" will create partition 256Gib in size
 # "-200M" will use all available space, minus 200Mib
 # "0" (zero) use all available space
-root_partition_size: "-4G"
+root_partition_size: "-200G"
 
 ###############################################################################
 # LVM Pool Settings
