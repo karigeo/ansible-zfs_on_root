@@ -39,9 +39,7 @@
       ansible.builtin.lineinfile:
         path: "{{ item }}"
         line: >
-          PS1="${debian_chroot:+($debian_chroot)}\[\$(tput setaf 2)\]\u@\[\$(tput bold)\]\[\$(tput
-          setaf 5)\]\h\[\$(tput sgr0)\]\[\$(tput setaf 7)\]:\[\$(tput bold)\]\[\$(tput setaf 4)\]\w\[\$(tput
-          setaf 7)\]\\$ \[\$(tput sgr0)\]"
+          PS1="${debian_chroot:+($debian_chroot)}\[\e[38;5;207;1m\]\u\[\e[0;38;5;177m\]@\[\e[38;5;45m\]\h\[\e[0m\] \W/: "
         state: present
         backup: true
       with_items:
@@ -52,8 +50,7 @@
       ansible.builtin.lineinfile: # noqa yaml[line-length]
         path: "/root/.bashrc"
         line: >
-          PS1="\[\033[01;37m\]\[\033[01;41m\]\u@\[\033[00m\]\[$(tput bold)\]\[$(tput
-          setaf 5)\]\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]$ "
+          PS1="\[\e[38;5;197;1m\]\u\[\e[0;38;5;177m\]@\[\e[38;5;45m\]\h\[\e[0m\] \W/: "
         state: present
         backup: true
 

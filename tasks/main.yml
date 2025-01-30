@@ -24,15 +24,15 @@
   loop:
     - 01_test_virtualbox.yml
     - 01_basic_checks.yml
-    - 02_confirm_defaults.yml
-    - 03_install_zfs_packages.yml
-    - 04_clear_partition_tables.yml
-    - 05_create_partitions.yml
-    - 06_0_create_luks.yml
-    - 06_create_pools.yml
-    - 07_create_filesystems.yml
-    - 08_create_datasets.yml
-    - 09_0_config_system.yml
+    # - 02_confirm_defaults.yml
+    # - 03_install_zfs_packages.yml
+    # - 04_clear_partition_tables.yml
+    # - 05_create_partitions.yml
+    # - 06_0_create_luks.yml
+    # - 06_create_pools.yml
+    # - 07_create_filesystems.yml
+    # - 08_create_datasets.yml
+    # - 09_0_config_system.yml
   loop_control:
     label: "{{ task_names }}"
     loop_var: task_names

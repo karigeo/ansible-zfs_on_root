@@ -14,15 +14,6 @@ no_log_secrets: false
 # The non-root user account will have sudo privileges
 default_root_password: "root"
 
-# Define non-root user account(s) to create (home drives will be its own dataset)
-# Each user will be required to change password upon first login
-regular_user_accounts:
-  - user_id: "rich"
-    password: "change!me"
-    full_name: "Richard Durso"
-    groups: "adm,cdrom,dip,lpadmin,lxd,plugdev,sambashare,sudo"
-    shell: "/bin/bash"
-
 ###############################################################################
 # Computer Configuration Settings
 ###############################################################################
@@ -30,12 +21,12 @@ regular_user_accounts:
 domain_name: "localdomain"
 
 # rEFInd Boot Menu Timeout by default is 20 seconds.
-refind_boot_menu_timeout: "10"
+refind_boot_menu_timeout: "5"
 
 # Specify rEFInd display resolution to use (width height)
 # Default is "0 0", which sets system default resolution
 # "max" tries to set the maximum possible resolution
-refind_resolution: "1920 1080"
+refind_resolution: "0 0"
 
 # Enables background image for refind / syslinux (see files/logo.jpg)
 # ATTENTION: file "theme.conf" has to be placed in the themes folder to configure the skin!
@@ -46,10 +37,6 @@ refind_theme_repo: https://github.com/karigeo/refind-ambience
 # Specify dirs, which should not be scanned by rEFInd: 
 # (comma separated list)
 refind_no_scan_dirs: "{{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}"
-
-# For Full GUI Desktop installation (set to false) or command-line only server
-# environment (set to true)
-command_line_only: true
 
 # Define the locale to be set with dpkg-reconfigure
 default_locale: "en_US.UTF-8"
@@ -81,29 +68,6 @@ additional_install_packages:
   - unattended-upgrades
   - lz4
 
-# Enable and Define SMTP Email Alerts for System
-# msmtp is a simple and easy to use SMTP client
-# https://github.com/chriswayg/ansible-msmtp-mailer
-msmtp:
-  enabled: true
-  msmtp_domain: "gmail.com"
-  # Default email alias name to sent alerts to (required)
-  msmtp_alias_default: "{{ secret_msmpt_send_to_email | default('not defined within vars/secrets/main.yml') }}"
-  # Optional Email alias address to redirect "root" emails to
-  # msmtp_alias_root: "other.account.for.root@gmail.com"
-  # Optional Email alias address to redirect "cron" emails to
-  # msmtp_alias_cron: "other.account.for.cron@gmail.com"
-
-  msmtp_default_account: "gmail"
-  accounts:
-    - account: "gmail"
-      host: "smtp.gmail.com"
-      port: "587"
-      auth: "on"
-      from: "{{ secret_msmtp_send_from_email | default('not defined within vars/secrets/main.yml') }}"
-      user: "{{ secret_msmtp_auth_user | default('not defined within vars/secrets/main.yml') }}"
-      password: "{{ secret_msmtp_auth_password | default('not defined within vars/secrets/main.yml') }}"
-
 ###############################################################################
 # Network Configuration
 ###############################################################################
@@ -118,7 +82,7 @@ ipv6:
     - "net.ipv6.conf.lo.disable_ipv6 = 1"
   apply_cmd: "sysctl -p"
 
-# As this is intended to install Proxmox, we should define a static IP and a VLAN aware bridge
+# As this is mainly intended to install Proxmox, we should define a static IP and a VLAN aware bridge
 # address_type can be "manual" "static" or "dhcp"
 ipv4:
   iface:
@@ -129,7 +93,7 @@ ipv4:
   bridge:
     name: vmbr0
     address_type: static
-    network_address: "10.11.12.227/24"
+    network_address: "10.11.12.20/24"
     gateway: 10.11.12.1
   dns_nameserver: 10.11.12.1
   dns_search_domain: intern.bsicloud.de
@@ -269,14 +233,14 @@ enable_dropbear_support: true
 apply_dropbear_settings:
   # Automatic (dhcp) or static IP assignment for zfsbootmenu remote access
   # "dhcp", "dhcp,dhcp6", "dhcp6", or "static"
-  remoteaccess_ip_config: "dhcp"
+  remoteaccess_ip_config: "static"
   # Remote access static IP address to connect to ZFSBootMenu
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
-  remoteaccess_ip: "192.168.0.222"
+  remoteaccess_ip: "10.11.12.20"
   # Remote access subnet mask
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
   remoteaccess_netmask: "255.255.255.0"
   # Define the full path to public key(s) you want to include in Dropbear
   # Allow dracut / dropbear use main user authorized_keys for access
   # Note that login to dropbear is "root" regardless of which authorized_keys is used
-  public_key_for_dropbear: "/tmphomes/ansible/.ssh/authorized_keys"
+  public_key_for_dropbear: "/home/ansible/.ssh/authorized_keys"

@@ -42,4 +42,9 @@
   register: cmd_output
   changed_when: cmd_output.rc == 0
 
-# Currently missing: "console-setup"
+- name: reconf console setup
+  ansible.builtin.command:
+    cmd: "dpkg-reconfigure --frontend noninteractive console-setup"
+  register: cmd_output
+  changed_when: cmd_output.rc == 0
+
