@@ -1,39 +1,52 @@
 ---
-# [ Update to Ubuntu Desktop if needed]####################################
-- name: Update to Ubuntu Desktop Block
+###############################################################################
+# [ Upgrade base system ]##################################################
+- name: Upgrade Base System Block
   when:
     - ansible_nodename != "localhost"
-    - ansible_os_family == "Debian"
-    - not command_line_only | default(false) | bool
   tags:
     - final_setup
-    - update_2_desktop
   block:
-    - name: Installing full GUI environment
+    - name: Update and Dist-Upgrade the system
       ansible.builtin.apt:
-        name: ubuntu-desktop
+        upgrade: dist
+        force_apt_get: true
+        autoclean: true
+        autoremove: true
+        update_cache: true
         install_recommends: true
 
-    - name: Disable initial setup dialog screen
-      community.general.ini_file:
-        path: /etc/gdm3/custom.conf
-        section: daemon
-        option: InitialSetupEnable
-        value: "false"
-        create: false
-
-    - name: Removing original netplan configuration
-      ansible.builtin.file:
-        path: /etc/netplan/01-netcfg.yaml
-        state: absent
-
-    - name: Copy netplan with Network Manager template to /etc/netplan/01-network-manager-all.yaml
-      ansible.builtin.template:
-        src: netplan-network-manager.j2
-        dest: /etc/netplan/01-network-manager-all.yaml
-        owner: root
-        group: root
-        mode: '0644'
+    - name: Install basic software set (should equate to 'tasksel standard')
+      ansible.builtin.apt:
+        autoclean: true
+        autoremove: true
+        install_recommends: true
+        name:
+          - task-ssh-server
+          - task-german
+          - pciutils
+          - bash-completion
+          - netcat-traditional
+          - doc-debian
+          - wget
+          - wamerican
+          - python3-reportbug
+          - systemd-timesyncd
+          - reportbug
+          - liblockfile-bin
+          - bind9-dnsutils
+          - libnss-systemd
+          - debian-faq
+          - mime-support
+          - groff-base
+          - lsof
+          - bind9-host
+          - man-db
+          - krb5-locales
+          - traceroute
+          - inetutils-telnet
+          - apt-listchanges
+          - gpg
 
 ###############################################################################
 # [ Disable IPv6 Networking ]##################################################
@@ -60,46 +73,26 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
-###############################################################################
-# [Install SMTP msmtp-mailer Client ]##########################################
-# https://galaxy.ansible.com/chriswayg/msmtp-mailer
-- name: Install MSMTP Mailer Client Block
-  when:
-    - msmtp.enabled | default(false) | bool
-  tags:
-    - final_setup
-    - install_msmtp
-  block:
-    - name: Install MSMTP Mailer Client
-      ansible.builtin.include_role:
-        name: chriswayg.msmtp-mailer
-        apply:
-          tags:
-            - mail
-      vars:
-        msmtp_default_account: "{{ msmtp.msmtp_default_account }}"
-        msmtp_domain: "{{ msmtp.msmtp_domain }}"
-        msmtp_accounts: "{{ msmtp.accounts }}"
-        msmtp_alias_default: "{{ msmtp.msmtp_alias_default }}"
-        msmtp_alias_root: "{{ msmtp.msmtp_alias_root | default(msmtp.msmtp_alias_default) }}"
-        smtp_alias_cron: "{{ msmtp.msmtp_alias_cron | default(msmtp.msmtp_alias_default) }}"
-        msmtp_log: "file"
-        msmtp_logfile: /var/log/msmtp.log
-        msmtprc_owner: "root"
-        msmtprc_group: "root"
-        msmtprc_mode: "0600"
-
-    # Enable ZFS Email Notifications
-    - name: Modify syslinux-update.sh
-      ansible.builtin.replace:
-        path: "/etc/zfs/zed.d/zed.rc"
-        regexp: '{{ find_values.regexp }}'
-        replace: '{{ find_values.replace }}'
-      loop:
-        - { regexp: '^ZED_EMAIL_ADDR.*', replace: 'ZED_EMAIL_ADDR="{{ msmtp.msmtp_alias_default }}"' }
-        - { regexp: '(^#)?ZED_EMAIL_OPTS.*', replace: 'ZED_EMAIL_OPTS="-s ''@SUBJECT@'' @ADDRESS@ -r {{ secret_msmtp_send_from_email }}"' }
-      loop_control:
-        loop_var: find_values
+# ###############################################################################
+# # [ Enable ZFS Email Notifications ]##########################################
+# - name: Enable ZFS Email Notifications Block
+#   when:
+#     - msmtp.enabled | default(false) | bool
+#   tags:
+#     - final_setup
+#     - install_msmtp
+#   block:
+#     # Enable ZFS Email Notifications
+#     - name: Modify syslinux-update.sh
+#       ansible.builtin.replace:
+#         path: "/etc/zfs/zed.d/zed.rc"
+#         regexp: '{{ find_values.regexp }}'
+#         replace: '{{ find_values.replace }}'
+#       loop:
+#         - { regexp: '^ZED_EMAIL_ADDR.*', replace: 'ZED_EMAIL_ADDR="{{ msmtp.msmtp_alias_default }}"' }
+#         - { regexp: '(^#)?ZED_EMAIL_OPTS.*', replace: 'ZED_EMAIL_OPTS="-s ''@SUBJECT@'' @ADDRESS@ -r {{ secret_msmtp_send_from_email }}"' }
+#       loop_control:
+#         loop_var: find_values
 
 ###############################################################################
 # [ Apply SSHD Settings ]######################################################
@@ -149,15 +142,26 @@
         group: root
         mode: '0644'
 
-    - name: Update timezone setting
-      ansible.builtin.command:
-        cmd: "timedatectl set-timezone {{ timezone_value }}"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    # - name: Update timezone setting
+    #   ansible.builtin.command:
+    #     cmd: "timedatectl set-timezone {{ timezone_value }}"
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
 
-    - name: Disable root password
+    - name: Get current epoch time
+      ansible.builtin.command:
+        cmd: "date --date='now' +%s"
+      register: date_output
+      changed_when: date_output.rc == 0
+
+    - name: Expire the root password
       ansible.builtin.user:
         name: 'root'
+        expires: date_output.stdout
+    
+    - name: Disable ansible user password
+      ansible.builtin.user:
+        name: ansible
         password: '*'
 
     # [ Switch Log Compression to ZFS Compression ]############################
