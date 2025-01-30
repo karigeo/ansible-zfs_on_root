@@ -18,7 +18,7 @@
 
           Press ENTER to reboot:
 
-          * Root password is now disabled.
+          * Root password is now expired.
           * Ansible password is disabled, only SSH key connection allowed.
           * ZFS Snapshots for apt and dpkg are enabled.
           * ZFS snapshot for base installation "@base_install" created.
@@ -28,7 +28,7 @@
             ssh -i ~/.ssh/<public_key> -p 222 {{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}
           {% endif %}
 
-            NOTE: You will likely have to remove "{{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}" from your ~/.ssh/known_hosts
+            NOTE: SSH host keys have been converted. If you experience problems, you have to remove "{{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}" from your ~/.ssh/known_hosts
 
           Press ENTER to reboot {{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}
 
