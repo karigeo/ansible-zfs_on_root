@@ -148,16 +148,13 @@
     #   register: cmd_output
     #   changed_when: cmd_output.rc == 0
 
-    - name: Get current epoch time
-      ansible.builtin.command:
-        cmd: "date --date='now' +%s"
-      register: date_output
-      changed_when: date_output.rc == 0
-
     - name: Expire the root password
-      ansible.builtin.user:
-        name: 'root'
-        expires: date_output.stdout
+      ansible.builtin.command:
+        cmd: "passwd --expire {{ item }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      loop:
+        - 'root'
     
     - name: Disable ansible user password
       ansible.builtin.user:
@@ -176,6 +173,8 @@
         cmd: |
           set -o pipefail
           if grep -Eq '(^|[^#y])compress' {{ item.path }} ; then sed -i -r 's/(^|[^#y])(compress)/\\1#\\2/' {{ item.path }}; fi
+      args:
+        executable: /bin/bash
       with_items: "{{ files_matched.files }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
@@ -188,6 +187,8 @@
       ansible.builtin.shell:
         cmd:
           zfs get type {{ root_pool_dataset_path }}@base_install || zfs snapshot {{ root_pool_dataset_path }}@base_install
+      args:
+        executable: /bin/bash
       register: cmd_output
       changed_when: cmd_output.rc == 0
 

@@ -12,14 +12,6 @@
 
          Default Root Password: {{ default_root_password }}
 
-      Primary Non-root Account: {{ regular_user_accounts[0].user_id }}
-                      Password: {{ (no_log_secrets | default(true)) | ternary("**********", regular_user_accounts[0].password) }}
-                     Full Name: {{ regular_user_accounts[0].full_name }}
-                 Add to Groups: {{ regular_user_accounts[0].groups }}
-            Accounts to Create: {{ regular_user_accounts | length }}
-
-      Environment Installation: {% if command_line_only | default(false) | bool %}Command-line only{% else %}Full GUI Environment{% endif %}
-
         Create Swap Partitions: {{ enable_swap_partitions }}
       {% if enable_swap_partitions | default(true) | bool%}
       {% if disk_by_id | length | int == 1 %}

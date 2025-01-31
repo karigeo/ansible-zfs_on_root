@@ -202,7 +202,7 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
-        - "useradd -G sudo -u {{ getent_passwd['ansible'].1 }} -s /bin/bash --create-home --home-dir /tmphomes/ansible ansible"
+        - "useradd -G sudo -u {{ getent_passwd['ansible'].1 }} -s /bin/bash --create-home --home-dir /home/ansible ansible"
         - "echo \"ansible:ansible\" | chpasswd"
         - "echo \"ansible ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers.d/99_sudo_include_file"
 
@@ -224,7 +224,7 @@
 
     - name: Copy SSH User Keys for User "ansible"
       ansible.builtin.copy: 
-        dest: "{{ live_cd_mountpoint }}/tmphomes/ansible/.ssh/"
+        dest: "{{ live_cd_mountpoint }}/home/ansible/.ssh/"
         src: "/home/ansible/.ssh/{{ item.name }}"
         remote_src: true
         mode: "{{ item.permission }}"

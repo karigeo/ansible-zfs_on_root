@@ -60,8 +60,8 @@ additional_install_packages:
   - pciutils
   - net-tools
   - ethtool
-  - fonts-ubuntu-console
   - htop
+  - btop
   - pollinate
   - fwupd
   - needrestart
@@ -172,6 +172,11 @@ single_or_mirror_lvm_partition_size: "0"
 # Estimated size is:  #devices-1 * size
 raidz_lvm_partition_size: "0"
 
+lvm_vg_name: pve
+lvm_volume_name: data
+lvm_volume_is_thin: true
+lvm_volume_size: "99%VG"
+
 ###############################################################################
 # ZFS Specific Adjustable Settings
 ###############################################################################
@@ -233,7 +238,7 @@ enable_dropbear_support: true
 apply_dropbear_settings:
   # Automatic (dhcp) or static IP assignment for zfsbootmenu remote access
   # "dhcp", "dhcp,dhcp6", "dhcp6", or "static"
-  remoteaccess_ip_config: "static"
+  remoteaccess_ip_config: "dhcp"
   # Remote access static IP address to connect to ZFSBootMenu
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
   remoteaccess_ip: "10.11.12.20"
