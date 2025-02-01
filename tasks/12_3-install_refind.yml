@@ -116,7 +116,7 @@
         - refind_resolution is defined
         - refind_resolution|length > 0
     
-    - name: Configure display resolution for rEFInd
+    - name: Configure directories to exclude from scan for rEFInd
       ansible.builtin.lineinfile:
         path: "{{ refind_path }}/refind.conf"
         regexp: '^(#+dont_scan_dirs|dont_scan_dirs)'

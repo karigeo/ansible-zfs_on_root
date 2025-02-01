@@ -7,10 +7,12 @@
     - notag
   block:
 
-    - name: Set correct crypt container backing device
-      ansible.builtin.set_fact:
-        lvm_crypt_backingdevice:  "{{ (disk_by_id | length | int == 2) | ternary( 'UUID='+(lvm_partition_uuids.0|default('')) , '/dev/md/lvm') }}"
-
-    - name: Debug Output lvm_crypt_backingdevice
+    - name: Debug Output of joind list
       ansible.builtin.debug:
-        msg: "{{ lvm_crypt_backingdevice }}" 
+        msg: "{{ disk_by_id | list | product([boot_partition, swap_partition, lvm_partition]) | map('join','-part') }}"
+
+    - name: Debug Output of every item in joined list
+      ansible.builtin.debug:
+        msg: "{{ item }}"
+      loop:
+        "{{ disk_by_id | list | product([boot_partition, swap_partition, lvm_partition]) | map('join','-part') }}"

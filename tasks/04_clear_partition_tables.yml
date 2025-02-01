@@ -75,14 +75,14 @@
 
     - name: Wipe mdadm superblock from partitions
       ansible.builtin.command:
-        cmd: "mdadm --zero-superblock --force {{ item }}-part1"
-        removes: "{{ item }}-part1"
+        cmd: "mdadm --zero-superblock --force {{ item }}"
+        removes: "{{ item }}"
       register: cmd_output
       changed_when:
         cmd_output.rc == 0
       ignore_errors: true
       loop:
-        "{{ disk_by_id }}"
+        "{{ disk_by_id | list | product([boot_partition, swap_partition, lvm_partition]) | map('join','-part') }}"
 
     - name: Wipe filesystem information
       ansible.builtin.command:

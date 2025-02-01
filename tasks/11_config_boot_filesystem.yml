@@ -42,7 +42,7 @@
     - name: Run chroot command to create mdadm device for multi-disk boot partition
       ansible.builtin.command:
         cmd: >
-          mdadm --create {{ boot_dev_name }} --verbose -R --metadata=1.0 --force --level=mirror
+          mdadm --create {{ boot_dev_name }} --verbose -R --metadata=0.9 --force --level=mirror
           --raid-devices={{ disk_by_id | length | int }} --homehost={{ inventory_hostname_short }}
           --name=efi  --assume-clean {{ mdadm_device_list }}
         creates: "{{ boot_dev_name }}"
