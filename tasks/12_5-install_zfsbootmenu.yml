@@ -81,20 +81,42 @@
       ansible.builtin.set_fact:
         root_partition_uuids: "{{ cmd_output.stdout | split('\n') | list}}"
 
-    # Read here: https://cryptsetup-team.pages.debian.net/cryptsetup/README.initramfs.html
-    - name: Generate crypttab entries
-      ansible.builtin.lineinfile:
-        path: /etc/crypttab
-        search_string: "crypt_{{ item | regex_search('([^\/]+$)') }}_root"
-        line: "crypt_{{ item | regex_search('([^\/]+$)') }}_root UUID={{ root_partition_uuids[ansible_loop.index0] }} /etc/cryptsetup-keys.d/{{ root_pool_name }}.key luks,discard,initramfs"
+    # - name: Debug Output crypttab line
+    #   ansible.builtin.debug:
+    #     msg:
+    #       - "{{ disk_by_id }}"
+    #       - "{{ item }}"
+    #       - "crypt_{{ item.0 | regex_search('([^\/]+$)') }}_root"
+    #   loop:
+    #     - "{{ disk_by_id }}"
+    #   loop_control:
+    #     extended: true
+
+    - name: Add root filesystem crypt container to crypttab
+      community.general.crypttab:
+        name: "crypt_{{ item.0 | regex_search('([^\/]+$)') }}_root"
+        backing_device: "UUID={{ root_partition_uuids[ansible_loop.index0] }}"
+        password: "/etc/cryptsetup-keys.d/{{ root_pool_name }}.key"
+        opts: luks,discard,initramfs
         state: present
-        owner: root
-        group: root
-        mode: '0644'
-      loop:
-        - "{{ disk_by_id }}"
+      loop: "{{ disk_by_id }}"
       loop_control:
         extended: true
+
+    # # Read here: https://cryptsetup-team.pages.debian.net/cryptsetup/README.initramfs.html
+    # - name: Generate crypttab entries
+    #   ansible.builtin.lineinfile:
+    #     path: /etc/crypttab
+    #     search_string: "crypt_{{ item | regex_search('([^\/]+$)') }}_root"
+    #     line: "crypt_{{ item | regex_search('([^\/]+$)') }}_root UUID={{ root_partition_uuids[ansible_loop.index0] }} /etc/cryptsetup-keys.d/{{ root_pool_name }}.key luks,discard,initramfs"
+    #     state: present
+    #     owner: root
+    #     group: root
+    #     mode: '0644'
+    #   loop:
+    #     - "{{ disk_by_id }}"
+    #   loop_control:
+    #     extended: true
 
     - name: Configure Keyfile Pattern for cryptsetup-initramfs
       ansible.builtin.lineinfile:

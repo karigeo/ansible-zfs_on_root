@@ -88,8 +88,8 @@ else
   echo "instance from the Ansible Control node."
 fi 
 echo "-----------------------------------------------------------------------------"
-echo IMPORTANT: IP address and hostname of live system should already match the
-echo            later system. Otherwise some issues can occur during setup when
-echo            running sudo tasks in chroot.
+echo "IMPORTANT: IP address and hostname of live system should already match the"
+echo "           later system. Otherwise some issues can occur during setup when"
+echo "           running sudo tasks in chroot."
 echo "-----------------------------------------------------------------------------"
 # Done

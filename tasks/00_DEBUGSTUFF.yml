@@ -2,32 +2,15 @@
 - name: Create LUKS Containers
   when:
     - ansible_nodename != "localhost"
+    - run_extra_debug | default(false) | bool
   tags:
     - notag
   block:
-    - name: Try to get all mounts
-      ansible.builtin.mount_facts:
-        include_aggregate_mounts: true
-        sources: all
-    # - name: Update facts module
-    #   setup:
-    - name: Debug Output
-      ansible.builtin.debug:
-        msg: "{{ ansible_facts['mount_points'] }}"
-      when:
-        - debug | default(false)
-    - name: Binding virtual file systems
-      ansible.posix.mount:
-        path: "{{ item.target }}"
-        src: "{{ item.source }}"
-        fstype: "{{ item.fstype }}"
-        opts: "{{ item.options }}"
-        state: ephemeral
-      loop:
-        - { options: '',     fstype: 'proc',   source: '/proc', target: '/mnt/proc'}
-        - { options: '',     fstype: 'sysfs',  source: 'sys',   target: '/mnt/sys'}
-        - { options: 'bind', fstype: '',       source: '/dev',  target: '/mnt/dev'}
-        - { options: '',     fstype: 'devpts', source: 'pts',   target: '/mnt/dev/pts'}
-      when:
-        - item.target not in ansible_facts['mount_points']
 
+    - name: Set correct crypt container backing device
+      ansible.builtin.set_fact:
+        lvm_crypt_backingdevice:  "{{ (disk_by_id | length | int == 2) | ternary( 'UUID='+(lvm_partition_uuids.0|default('')) , '/dev/md/lvm') }}"
+
+    - name: Debug Output lvm_crypt_backingdevice
+      ansible.builtin.debug:
+        msg: "{{ lvm_crypt_backingdevice }}" 

@@ -21,14 +21,14 @@
         passphrase: "{{ passphrase }}"
       loop: "{{ disk_by_id }}"
 
-    - name: Create LUKS containers for LVM partitions
-      when: create_lvm_partition | bool
-      community.crypto.luks_device:
-        device: "{{ item }}-part{{ lvm_partition }}"
-        state: "opened"
-        name: "crypt_{{ item | regex_search('([^\/]+$)') }}_lvm" #regex to find everything after last occurance of '/' --> find disk-id name
-        cipher: "aes-xts-plain64"
-        keysize: 512
-        hash: "sha256"
-        passphrase: "{{ passphrase }}"
-      loop: "{{ disk_by_id }}"
+    # - name: Create LUKS containers for LVM partitions
+    #   when: create_lvm_partition | bool
+    #   community.crypto.luks_device:
+    #     device: "{{ item }}-part{{ lvm_partition }}"
+    #     state: "opened"
+    #     name: "crypt_{{ item | regex_search('([^\/]+$)') }}_lvm" #regex to find everything after last occurance of '/' --> find disk-id name
+    #     cipher: "aes-xts-plain64"
+    #     keysize: 512
+    #     hash: "sha256"
+    #     passphrase: "{{ passphrase }}"
+    #   loop: "{{ disk_by_id }}"

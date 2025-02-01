@@ -15,8 +15,8 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
-        - "mkswap -f {{ disk_by_id[0] }}-part2"
-        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value {{ disk_by_id[0] }}-part2) none swap discard 0 0 >> /etc/fstab"
+        - "mkswap -f {{ disk_by_id[0] }}-part{{ swap_partition }}"
+        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value {{ disk_by_id[0] }}-part{{ swap_partition }}) none swap discard 0 0 >> /etc/fstab"
 
     - name: Run command to enable Unencrypted swap
       ansible.builtin.command:
@@ -49,7 +49,7 @@
       when:
         - disk_by_id | length | int == 2
 
-    - name: See if raid should be used
+    - name: See if raid5 should be used
       ansible.builtin.set_fact:
         mdadm_type: "raid5"
       when:
@@ -58,14 +58,14 @@
     # Create a list of swap device partitions to use
     - name: Create a list of swap device partitions to use
       ansible.builtin.set_fact:
-        mdadm_swap_device_list: "{{ mdadm_swap_device_list | default('') }} {{ item }}-part2"
+        mdadm_swap_device_list: "{{ mdadm_swap_device_list | default('') }} {{ item }}-part{{ swap_partition }}"
       loop:
         "{{ disk_by_id }}"
 
     # The "-R" - is needed to suppress the "Continue creating array?" prompt
     - name: Run command to create mdadm device for multi-disk swap
       ansible.builtin.command: >
-        mdadm --create --verbose /dev/md0 -R --metadata=1.2
+        mdadm --create --verbose /dev/md/swap -R --metadata=1.2
         --level={{ mdadm_type }} --raid-devices={{ disk_by_id | length | int }} {{ mdadm_swap_device_list }}
         --homehost={{ inventory_hostname_short }}
       register: cmd_output
@@ -88,8 +88,8 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
-        - "mkswap -f /dev/md0"
-        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value /dev/md0) none swap discard 0 0 >> /etc/fstab"
+        - "mkswap -f /dev/md/swap"
+        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value /dev/md/swap) none swap discard 0 0 >> /etc/fstab"
 
 ###############################################################################
 # [ Single or Multi Disk Encrypted Swap Configuration ]########################
@@ -113,7 +113,7 @@
     # Work for Encrypted Single Disk SWAP
     - name: Run command to add single disk encrypted swap partitions to /etc/crypttab
       ansible.builtin.shell:
-        cmd: "echo swap {{ disk_by_id[0] }}-part2 /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
+        cmd: "echo crypt_swap {{ disk_by_id[0] }}-part{{ swap_partition }} /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       when:
@@ -122,7 +122,7 @@
     # Work for Multi Disk Encrypted SWAP
     - name: Run commands to add multi-disk encrypted swap partitions to /etc/crypttab
       ansible.builtin.shell:
-        cmd: "echo swap /dev/md0 /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
+        cmd: "echo crypt_swap /dev/md/swap /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       when:
@@ -130,7 +130,7 @@
 
     - name: Run command to add swap device map to /etc/fstab (Single or Multi Disk)
       ansible.builtin.shell:
-        cmd: "echo /dev/mapper/swap none swap defaults 0 0 >> /etc/fstab"
+        cmd: "echo /dev/mapper/crypt_swap none swap defaults 0 0 >> /etc/fstab"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 

@@ -202,7 +202,7 @@ zfs_rpool_ashift: 12
 
 # Enable ZFS Pool Trim Service after creating
 # NOTE: false will create, just not enable by default.
-zfs_pool_trim_systemd_service_enable: false
+zfs_pool_trim_systemd_service_enable: true
 
 # Define ZFS Pool Trim Schedule (see systemd OnCalendar for valid options)
 zfs_pool_trim_systemd_oncalendar: "weekly"

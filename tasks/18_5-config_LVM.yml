@@ -14,6 +14,164 @@
         vg: "{{ lvm_vg_name }}"
         pvs: "{{ disk_by_id }}-part{{ lvm_partition }}"
 
+###############################################################################
+# [ Create Multi Disk LVM Mirror or RAID ]####################################
+- name: Create Multi Disk LVM Mirror or RAID Block
+  when:
+    - ansible_nodename != "localhost"
+    - create_lvm_partition | default(true) | bool
+    - disk_by_id | length | int > 1
+  tags:
+    - config_lvm
+  block:
+    - name: Make sure 'mdadm' is installed
+      ansible.builtin.apt:
+        name: mdadm
+        state: present
+      when:
+        - ansible_os_family == "Debian"
+
+    # if more than 1 device, and boot pool is a mirror then use a mirror
+    - name: See if mirror is to be used
+      ansible.builtin.set_fact:
+        mdadm_type: "mirror"
+      when:
+        - disk_by_id | length | int == 2
+
+    - name: See if raid-5 should be used
+      ansible.builtin.set_fact:
+        mdadm_type: "raid5"
+      when:
+        - disk_by_id | length | int > 2
+
+    # Create a list of LVM device partitions to use
+    - name: Create a list of LVM device partitions to use
+      ansible.builtin.set_fact:
+        mdadm_lvm_device_list: "{{ mdadm_lvm_device_list | default('') }} {{ item }}-part{{ lvm_partition }}"
+      loop: "{{ disk_by_id }}"
+
+    # The "-R" - is needed to suppress the "Continue creating array?" prompt
+    - name: Run command to create mdadm device for multi-disk LVM
+      ansible.builtin.command: >
+        mdadm --create --verbose /dev/md/lvm -R --metadata=1.2
+        --level={{ mdadm_type }} --raid-devices={{ disk_by_id | length | int }} {{ mdadm_lvm_device_list }}
+        --homehost={{ inventory_hostname_short }}
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+
+###############################################################################
+# [ Configure Multi Disk Unencrypted LVM ]####################################
+- name: Multi Disk Unencrypted LVM Block
+  when:
+    - ansible_nodename != "localhost"
+    - create_lvm_partition | default(true) | bool
+    - disk_encryption_type == "none"
+    - disk_by_id | length | int > 1
+  tags:
+    - config_lvm
+  block:
+    - name: Create LVM volume group on unencrypted Raid device
+      community.general.lvg:
+        vg: "{{ lvm_vg_name }}"
+        pvs: "/dev/md/lvm"
+
+###############################################################################
+# [ Encrypted LVM Configuration ]##############################################
+- name: Encrypted LVM Block
+  when:
+    - ansible_nodename != "localhost"
+    - create_lvm_partition|default(true)|bool
+    - disk_encryption_type == "luks" or disk_encryption_type == "native"
+  tags:
+    - config_lvm
+  block:
+    - name: Make sure 'cryptsetup' is installed
+      ansible.builtin.apt:
+        name: cryptsetup
+        state: present
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: (Single Disk) Query UUID for LVM crypt container device
+      ansible.builtin.command: 
+        cmd: "blkid -s UUID -o value {{ disk_by_id | product(['-part' + lvm_partition + ' ']) | map('join') | join(' ')}}"
+      register: cmd_output
+      changed_when:
+        cmd_output.rc == 0
+      when: 
+        - disk_by_id | length | int == 1
+
+    - name: (Single Disk) Write UUID into list variable
+      ansible.builtin.set_fact:
+        lvm_partition_uuids: "{{ cmd_output.stdout | split('\n') | list}}"
+      when: 
+        - disk_by_id | length | int == 1
+      failed_when:
+        - lvm_partition_uuids | length | int > 1
+
+    - name: Set correct crypt container backing device
+      ansible.builtin.set_fact:
+        lvm_crypt_backingdevice:  "{{ (disk_by_id | length | int == 1) | ternary( 'UUID='+(lvm_partition_uuids.0|default('')) , '/dev/md/lvm') }}"
+        lvm_crypt_device:         "{{ (disk_by_id | length | int == 1) | ternary( disk_by_id.0+'-part'+lvm_partition , '/dev/md/lvm' ) }}"
+
+    - name: Create LUKS container for LVM partition
+      community.crypto.luks_device:
+        device: "{{ lvm_crypt_device }}"
+        state: "opened"
+        name: "crypt_lvm"
+        cipher: "aes-xts-plain64"
+        keysize: 512
+        hash: "sha256"
+        passphrase: "{{ passphrase }}"
+      
+    - name: Create random key for LVM crypt container
+      community.general.filesize:
+        path: /etc/cryptsetup-keys.d/{{ lvm_vg_name }}.key
+        source: /dev/urandom
+        blocksize: 1024
+        size: 4
+        #force: true
+        owner: root
+        group: root
+        mode: '0600'
+    
+    - name: Add new key to LVM crypt container
+      community.crypto.luks_device:
+        device: "{{ lvm_crypt_device }}"
+        passphrase: "{{ passphrase }}"
+        new_keyfile: "/etc/cryptsetup-keys.d/{{ lvm_vg_name }}.key"
+
+    - name: Add LVM crypt container to crypttab
+      community.general.crypttab:
+        name: "crypt_lvm"
+        backing_device: "{{ lvm_crypt_backingdevice }}"
+        password: "/etc/cryptsetup-keys.d/{{ lvm_vg_name }}.key"
+        opts: luks,discard,initramfs
+        state: present
+
+    - name: Create LVM volume group on LVM crypt container
+      community.general.lvg:
+        vg: "{{ lvm_vg_name }}"
+        pvs: "/dev/mapper/crypt_lvm"
+
+    - name: Run commands to update initramfs and generate ZBM
+      ansible.builtin.command:
+        cmd: "{{ item }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      loop:
+        - "update-initramfs -c -k all"
+        - "generate-zbm --debug"
+
+###############################################################
+# [ Common Tasks of LVM Configuration ]########################
+- name: Run common tasks of LVM configuration
+  when:
+    - ansible_nodename != "localhost"
+    - create_lvm_partition|default(true)|bool
+  tags:
+    - config_lvm
+  block:
     - name: Create a LVM thin pool
       community.general.lvol:
         vg: "{{ lvm_vg_name }}"
@@ -29,115 +187,3 @@
         size: "{{ lvm_volume_size }}"
       when:
         - not lvm_volume_is_thin
-
-###############################################################################
-# [ Create Multi Disk LVM Mirror or RAID ]####################################
-# - name: Create Multi Disk LVM Mirror or RAID Block
-#   when:
-#     - ansible_nodename != "localhost"
-#     - enable_swap_partitions | default(true) | bool
-#     - disk_by_id | length | int > 1
-#   tags:
-#     - config_swap
-#   block:
-#     - name: Run command to install mdadm for multi-disk swap
-#       ansible.builtin.command:
-#         cmd: "apt install --yes mdadm"
-#       register: cmd_output
-#       changed_when: cmd_output.rc == 0
-#       when:
-#         - ansible_os_family == "Debian"
-
-#     # if more than 1 device, and boot pool is a mirror then use a mirror
-#     - name: See if mirror is to be used
-#       ansible.builtin.set_fact:
-#         mdadm_type: "mirror"
-#       when:
-#         - disk_by_id | length | int == 2
-
-#     - name: See if raid should be used
-#       ansible.builtin.set_fact:
-#         mdadm_type: "raid5"
-#       when:
-#         - disk_by_id | length | int > 2
-
-#     # Create a list of swap device partitions to use
-#     - name: Create a list of swap device partitions to use
-#       ansible.builtin.set_fact:
-#         mdadm_swap_device_list: "{{ mdadm_swap_device_list | default('') }} {{ item }}-part2"
-#       loop:
-#         "{{ disk_by_id }}"
-
-#     # The "-R" - is needed to suppress the "Continue creating array?" prompt
-#     - name: Run command to create mdadm device for multi-disk swap
-#       ansible.builtin.command: >
-#         mdadm --create --verbose /dev/md0 -R --metadata=1.2
-#         --level={{ mdadm_type }} --raid-devices={{ disk_by_id | length | int }} {{ mdadm_swap_device_list }}
-#         --homehost={{ inventory_hostname_short }}
-#       register: cmd_output
-#       changed_when: cmd_output.rc == 0
-
-###############################################################################
-# [ Configure Multi Disk Unencrypted Swap ]####################################
-# - name: Multi Disk Unencrypted Swap Block
-#   when:
-#     - ansible_nodename != "localhost"
-#     - enable_swap_partitions | default(true) | bool
-#     - disk_encryption_type == "none"
-#     - disk_by_id | length | int > 1
-#   tags:
-#     - config_swap
-#   block:
-#     - name: Run command to create swap filesystem for multi-disk mdadm device
-#       ansible.builtin.command:
-#         cmd: "{{ item }}"
-#       register: cmd_output
-#       changed_when: cmd_output.rc == 0
-#       with_items:
-#         - "mkswap -f /dev/md0"
-#         - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value /dev/md0) none swap discard 0 0 >> /etc/fstab"
-
-###############################################################################
-# [ Single or Multi Disk Encrypted LVM Configuration ]########################
-- name: Multi Disk Encrypted LVM Block
-  when:
-    - ansible_nodename != "localhost"
-    - create_lvm_partition|default(true)|bool
-    - disk_encryption_type == "luks" or disk_encryption_type == "native"
-  tags:
-    - config_lvm
-  block:
-    - name: Run command to install cryptsetup on Debian based systems
-      ansible.builtin.command:
-        cmd: "apt install --yes cryptsetup"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-
-      when:
-        - ansible_os_family == "Debian"
-
-    # Work for Encrypted Single Disk SWAP
-    - name: Run command to add single disk encrypted LVM partitions to /etc/crypttab
-      ansible.builtin.shell:
-        cmd: "echo swap {{ disk_by_id[0] }}-part2 /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      when:
-        - disk_by_id | length | int == 1
-
-    # Work for Multi Disk Encrypted SWAP
-    - name: Run commands to add multi-disk encrypted swap partitions to /etc/crypttab
-      ansible.builtin.shell:
-        cmd: "echo swap /dev/md0 /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      when:
-        - disk_by_id | length | int > 1
-
-    - name: Run command to add swap device map to /etc/fstab (Single or Multi Disk)
-      ansible.builtin.shell:
-        cmd: "echo /dev/mapper/swap none swap defaults 0 0 >> /etc/fstab"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-
-###############################################################################

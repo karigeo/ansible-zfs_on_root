@@ -24,6 +24,7 @@
   loop:
     - 01_test_virtualbox.yml
     - 01_basic_checks.yml
+    - 00_DEBUGSTUFF.yml
     # - 02_confirm_defaults.yml
     # - 03_install_zfs_packages.yml
     # - 04_clear_partition_tables.yml
@@ -56,16 +57,17 @@
 #     label: "{{ task_names }}"
 #     loop_var: task_names
 
-- name: Include Task Files to Reboot, Reconnect and Finalize new System Config
-  ansible.builtin.include_tasks: "{{ task_names }}"
-  tags: ["always"]
-  loop:
-    # - 15_unmount_chroot.yml
-    # - 16_restart_remote.yml
-    # - 17_localization.yml
-    # - 18_enable_dropbear.yml
-    - 19_final_setup.yml
-    - 20_restart_remote_final.yml
-  loop_control:
-    label: "{{ task_names }}"
-    loop_var: task_names
+# - name: Include Task Files to Reboot, Reconnect and Finalize new System Config
+#   ansible.builtin.include_tasks: "{{ task_names }}"
+#   tags: ["always"]
+#   loop:
+#     - 15_unmount_chroot.yml
+#     - 16_restart_remote.yml
+#     - 17_localization.yml
+#     - 18_enable_dropbear.yml
+#     - 18_5-config_LVM.yml
+#     - 19_final_setup.yml
+#     - 20_restart_remote_final.yml
+#   loop_control:
+#     label: "{{ task_names }}"
+#     loop_var: task_names
