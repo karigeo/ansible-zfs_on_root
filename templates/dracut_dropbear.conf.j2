@@ -9,9 +9,9 @@ add_dracutmodules+=" crypt-ssh network-legacy "
 install_optional_items+=" /etc/cmdline.d/dracut-network.conf "
 
 ## Copy system keys for consistent access
-dropbear_rsa_key="/etc/dropbear/ssh_host_rsa_key"
-dropbear_ecdsa_key="/etc/dropbear/ssh_host_ecdsa_key"
-dropbear_ed25519_key="/etc/dropbear/ssh_host_ed25519_key"
+dropbear_rsa_key="/etc/ssh/ssh_host_rsa_key"
+dropbear_ecdsa_key="/etc/ssh/ssh_host_ecdsa_key"
+dropbear_ed25519_key="/etc/ssh/ssh_host_ed25519_key"
 
 ##Access is by authorized keys only. No password.
 ##By default, the list of authorized keys is taken from /root/.ssh/authorized_keys on the host.
@@ -19,7 +19,7 @@ dropbear_ed25519_key="/etc/dropbear/ssh_host_ed25519_key"
 ##You can add your remote user key to a user authorized_keys file from a remote machine's terminal using:
 ##"ssh-copy-id -i ~/.ssh/id_rsa.pub $user@{IP_ADDRESS or FQDN of the server}"
 ##Then amend/uncomment the dropbear_acl variable to match:
-#dropbear_acl="{{ apply_dropbear_settings.public_key_for_dropbear }}"
+dropbear_acl="{{ apply_dropbear_settings.public_key_for_dropbear }}"
 ##Remember to "sudo generate-zbm" on the host after adding the remote user key to the authorized_keys file.
 
 ##Note that login to dropbear is "root" regardless of which authorized_keys is used.

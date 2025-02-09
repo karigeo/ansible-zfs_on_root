@@ -55,7 +55,7 @@
       ansible.builtin.command: >
         mdadm --create --verbose /dev/md/lvm -R --metadata=1.2
         --level={{ mdadm_type }} --raid-devices={{ disk_by_id | length | int }} {{ mdadm_lvm_device_list }}
-        --homehost={{ inventory_hostname_short }}
+        --homehost={{ host_name }}
       register: cmd_output
       changed_when: cmd_output.rc == 0
 

@@ -39,20 +39,20 @@
         "{{ disk_by_id }}"
 
     # The "-R" - is needed to suppress the "Continue creating array?" prompt
-    - name: Run chroot command to create mdadm device for multi-disk boot partition
+    - name: Run command to create mdadm device for multi-disk boot partition
       ansible.builtin.command:
         cmd: >
-          mdadm --create {{ boot_dev_name }} --verbose -R --metadata=0.9 --force --level=mirror
-          --raid-devices={{ disk_by_id | length | int }} --homehost={{ inventory_hostname_short }}
+          mdadm --create {{ boot_dev_name }} --verbose -R --metadata=1.0 --force --level=mirror
+          --raid-devices={{ disk_by_id | length | int }} --homehost={{ host_name }}
           --name=efi  --assume-clean {{ mdadm_device_list }}
         creates: "{{ boot_dev_name }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
-    - name: Run chroot command to create mdadm.conf file multi-disk boot partition
+    - name: Run command to create mdadm.conf file multi-disk boot partition
       ansible.builtin.command:
         cmd:
-          mdadm --examine --scan >> {{ live_cd_mountpoint }}/etc/mdadm/mdadm.conf
+          mdadm --examine --scan >> /etc/mdadm/mdadm.conf
         creates: "{{ boot_dev_name }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0

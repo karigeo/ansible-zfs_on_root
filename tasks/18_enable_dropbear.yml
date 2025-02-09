@@ -142,44 +142,46 @@
         mode: "0755"
         state: directory
 
-    - name: Copy SSH Server Keys into temporary location
-      ansible.builtin.copy: 
-        dest: "/tmp/ssh/"
-        src: "/etc/ssh/ssh_host_{{ item }}_key"
-        remote_src: true
-        owner: root
-        group: root
-        mode: '0600'
-      loop:
-      # The dropbear.conf will look for these 3 keys
-        - "ecdsa"
-        - "ed25519"
-        - "rsa"
+    ### it seems that module-setup.sh of 60crypt-ssh can convert the openssh host system keys just fine, 
+    ### so commented out and specified host keys in dracut_dropbear.conf template
+    # - name: Copy SSH Server Keys into temporary location
+    #   ansible.builtin.copy: 
+    #     dest: "/tmp/ssh/"
+    #     src: "/etc/ssh/ssh_host_{{ item }}_key"
+    #     remote_src: true
+    #     owner: root
+    #     group: root
+    #     mode: '0600'
+    #   loop:
+    #   # The dropbear.conf will look for these 3 keys
+    #     - "ecdsa"
+    #     - "ed25519"
+    #     - "rsa"
 
-    - name: Convert temporary ssh keys to PEM format
-      ansible.builtin.command:
-        cmd: 'ssh-keygen -p -N "" -m PEM -f /tmp/ssh/ssh_host_{{ item }}_key'
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      loop:
-        - "ecdsa"
-        - "ed25519"
-        - "rsa"
+    # - name: Convert temporary ssh keys to PEM format
+    #   ansible.builtin.command:
+    #     cmd: 'ssh-keygen -p -N "" -m PEM -f /tmp/ssh/ssh_host_{{ item }}_key'
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
+    #   loop:
+    #     - "ecdsa"
+    #     - "ed25519"
+    #     - "rsa"
 
-    - name: Convert SSH keys to dropbear format
-      ansible.builtin.command:
-        cmd: 'dropbearconvert openssh dropbear /tmp/ssh/ssh_host_{{ item }}_key /etc/dropbear/dropbear_{{ item }}_host_key'
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      loop:
-        - "ecdsa"
-        - "ed25519"
-        - "rsa"
+    # - name: Convert SSH keys to dropbear format
+    #   ansible.builtin.command:
+    #     cmd: 'dropbearconvert openssh dropbear /tmp/ssh/ssh_host_{{ item }}_key /etc/dropbear/dropbear_{{ item }}_host_key'
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
+    #   loop:
+    #     - "ecdsa"
+    #     - "ed25519"
+    #     - "rsa"
       
-    - name: Remove temporary key files
-      ansible.builtin.file:
-        path: "/tmp/ssh/"
-        state: absent
+    # - name: Remove temporary key files
+    #   ansible.builtin.file:
+    #     path: "/tmp/ssh/"
+    #     state: absent
 
     # [ Add dracut dropbear config file ]######################################
     - name: Copy dracut dropbear config file to /etc/zfsbootmenu/dracut.conf.d/dropbear.conf
