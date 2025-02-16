@@ -52,6 +52,12 @@
         state: directory
         mode: '0700'
 
+    - name: Debug Output root_pool_name
+      ansible.builtin.debug:
+        msg: "{{ root_pool_name }}"
+      when:
+        debug | default(false)
+
     - name: Create random key for root pool
       community.general.filesize:
         path: /etc/cryptsetup-keys.d/{{ root_pool_name }}.key
@@ -62,6 +68,13 @@
         owner: root
         group: root
         mode: '0600'
+
+    - name: Debug Output luks device name
+      ansible.builtin.debug:
+        msg: "device: {{ item }}-part{{ root_partition }}"
+      loop: "{{ disk_by_id }}"
+      when:
+        debug | default(false)
 
     - name: Add new keys to root containers on each disk
       community.crypto.luks_device:
@@ -81,20 +94,21 @@
       ansible.builtin.set_fact:
         root_partition_uuids: "{{ cmd_output.stdout | split('\n') | list}}"
 
-    # - name: Debug Output crypttab line
-    #   ansible.builtin.debug:
-    #     msg:
-    #       - "{{ disk_by_id }}"
-    #       - "{{ item }}"
-    #       - "crypt_{{ item.0 | regex_search('([^\/]+$)') }}_root"
-    #   loop:
-    #     - "{{ disk_by_id }}"
-    #   loop_control:
-    #     extended: true
+    - name: Debug Output crypttab line
+      ansible.builtin.debug:
+        msg:
+          - "{{ disk_by_id }}"
+          - "{{ item }}"
+          - "crypt_{{ item | regex_search('([^\/]+$)') }}_root"
+      loop: "{{ disk_by_id }}"
+      loop_control:
+        extended: true
+      when:
+        debug | default(false)
 
     - name: Add root filesystem crypt container to crypttab
       community.general.crypttab:
-        name: "crypt_{{ item.0 | regex_search('([^\/]+$)') }}_root"
+        name: "crypt_{{ item | regex_search('([^\/]+$)') }}_root"
         backing_device: "UUID={{ root_partition_uuids[ansible_loop.index0] }}"
         password: "/etc/cryptsetup-keys.d/{{ root_pool_name }}.key"
         opts: luks,discard,initramfs

@@ -92,27 +92,16 @@
       when:
         - ansible_os_family == "Debian"
 
-    - name: (Single Disk) Query UUID for LVM crypt container device
-      ansible.builtin.command: 
-        cmd: "blkid -s UUID -o value {{ disk_by_id | product(['-part' + lvm_partition + ' ']) | map('join') | join(' ')}}"
-      register: cmd_output
-      changed_when:
-        cmd_output.rc == 0
-      when: 
-        - disk_by_id | length | int == 1
-
-    - name: (Single Disk) Write UUID into list variable
+    - name: Set correct crypt container device
       ansible.builtin.set_fact:
-        lvm_partition_uuids: "{{ cmd_output.stdout | split('\n') | list}}"
-      when: 
-        - disk_by_id | length | int == 1
-      failed_when:
-        - lvm_partition_uuids | length | int > 1
-
-    - name: Set correct crypt container backing device
-      ansible.builtin.set_fact:
-        lvm_crypt_backingdevice:  "{{ (disk_by_id | length | int == 1) | ternary( 'UUID='+(lvm_partition_uuids.0|default('')) , '/dev/md/lvm') }}"
         lvm_crypt_device:         "{{ (disk_by_id | length | int == 1) | ternary( disk_by_id.0+'-part'+lvm_partition , '/dev/md/lvm' ) }}"
+
+    - name: Debug Output of crypt container backing device variables
+      ansible.builtin.debug:
+        msg: 
+          - "Vaule of lvm_crypt_device: {{ lvm_crypt_device }}"
+      when:
+        - debug | default(false)
 
     - name: Create LUKS container for LVM partition
       community.crypto.luks_device:
@@ -140,6 +129,59 @@
         device: "{{ lvm_crypt_device }}"
         passphrase: "{{ passphrase }}"
         new_keyfile: "/etc/cryptsetup-keys.d/{{ lvm_vg_name }}.key"
+
+    - name: (Single Disk) Debug Output of disk_by_id
+      ansible.builtin.debug:
+        msg: 
+          - "disk_by_id value: {{ disk_by_id }}"
+          - "blkid command: blkid -s UUID -o value {{ disk_by_id | product(['-part' + lvm_partition + ' ']) | map('join') | join(' ')}}"
+      when:
+        - debug | default(false)
+        - disk_by_id | length | int == 1
+
+    - name: (Single Disk) Query UUID for LVM crypt container device
+      ansible.builtin.command: 
+        cmd: "blkid -s UUID -o value {{ disk_by_id | product(['-part' + lvm_partition + ' ']) | map('join') | join(' ')}}"
+      register: cmd_output
+      changed_when:
+        cmd_output.rc == 0
+      when: 
+        - disk_by_id | length | int == 1
+      
+    - name: (Single Disk) Debug Output of blkid command
+      ansible.builtin.debug:
+        msg: "{{ cmd_output.stdout }}"
+      when:
+        - debug | default(false)
+        - disk_by_id | length | int == 1
+
+    - name: (Single Disk) Write UUID into list variable
+      ansible.builtin.set_fact:
+        lvm_partition_uuids: "{{ cmd_output.stdout | split('\n') | list}}"
+      when: 
+        - disk_by_id | length | int == 1
+      failed_when:
+        - lvm_partition_uuids | length | int > 1
+    
+    - name: (Single Disk) Debug Output of UUID list variable
+      ansible.builtin.debug:
+        msg: "{{ lvm_partition_uuids }}"
+      when:
+        - debug | default(false)
+        - disk_by_id | length | int == 1
+
+    - name: Set correct crypt container backing device
+      ansible.builtin.set_fact:
+        lvm_crypt_backingdevice:  "{{ (disk_by_id | length | int == 1) | ternary( 'UUID='+(lvm_partition_uuids.0|default('')) , '/dev/md/lvm') }}"
+
+    - name: Debug Output of crypt container backing device variables
+      ansible.builtin.debug:
+        msg: 
+          - "Single Disk UUID: {{ 'UUID='+(lvm_partition_uuids.0|default('')) }}"
+          - "Vaule of lvm_crypt_backingdevice: {{ lvm_crypt_backingdevice }}"
+      when:
+        - debug | default(false)
+        - disk_by_id | length | int == 1
 
     - name: Add LVM crypt container to crypttab
       community.general.crypttab:
