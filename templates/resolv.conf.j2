@@ -1,2 +1,4 @@
+{% if ipv4.dns_search_domain != 'none' %}
 search {{ ipv4.dns_search_domain }}
+{% endif %}
 nameserver {{ ipv4.dns_nameserver }}
