@@ -32,7 +32,7 @@ if [[ $? -ne 0 ]]; then
 fi
 
 # install SSH Server and Python to allow ansible to connect
-sudo apt install --yes openssh-server vim python3 python3-apt mdadm btop htop
+sudo apt install --yes openssh-server vim python3 python3-apt python3-pexpect mdadm btop htop
 if [[ $? -ne 0 ]]; then
   echo
   echo "ERROR: installing required packages failed."
