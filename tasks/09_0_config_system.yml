@@ -1,0 +1,225 @@
+---
+# [ Bootstrap new System ]#################################################
+- name: Bootstrap New System Block
+  when:
+    - ansible_nodename != "localhost"
+  tags:
+    - config_system
+  block:
+    # - name: Mount run directory as tmpfs # noqa command-instead-of-module
+    #   ansible.builtin.command:
+    #     "mount -t tmpfs tmpfs {{ live_cd_mountpoint }}/run"
+    #   register: cmd_output
+    #   changed_when: cmd_output.rc == 0
+
+    - name: Mount run directory as tmpfs
+      ansible.posix.mount:
+        path: "{{ live_cd_mountpoint }}/run"
+        src: tmpfs
+        fstype: tmpfs
+        state: ephemeral
+
+    - name: Installing a minimal linux system
+      ansible.builtin.command:
+        "debootstrap --include lsb-release,python3,python3-apt,sudo,openssh-server {{ distro_release }} {{ live_cd_mountpoint }}"
+      # register: cmd_output
+      # changed_when: cmd_output.rc == 0
+      args:
+        creates: "{{ live_cd_mountpoint }}/etc/passwd"
+
+    - name: Copy ZFS hostid
+      ansible.builtin.copy:
+        src: /etc/hostid
+        remote_src: true
+        dest: "{{ live_cd_mountpoint }}/etc/hostid"
+
+    - name: Disable ZFS Device Node support
+      ansible.builtin.command:
+        "zfs set devices=off {{ root_pool_name }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+
+# [ Start Configuring System ]#################################################
+- name: Configure System Block
+  when:
+    - ansible_nodename != "localhost"
+  tags:
+    - config_system
+  block:
+    - name: Copy template files to /mnt/etc/
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "{{ live_cd_mountpoint }}/etc/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      with_items:
+        - hostname
+        - hosts
+      loop_control:
+        label: "{{ item }}.j2"
+
+    - name: Get Network adapter name from ansible facts
+      ansible.builtin.set_fact:
+        nic_name:
+          stdout: "{{ ansible_default_ipv4.interface }}"
+
+    - name: Store Network adapter name
+      ansible.builtin.set_fact:
+        ipv4: "{{ ipv4|combine({'iface': {'name': {{ nic_name.stdout }} }}, recursive=True) }}"
+      when:
+        - (ipv4.iface.name is undefined) or (ipv4.iface.name == 'none') or (ipv4.iface.name == 'auto')
+
+    - name: Debug Show Network Adapter Name Detected
+      ansible.builtin.debug:
+        msg: "Detected Name: {{ nic_name.stdout }}"
+      when:
+        - debug|default(false)
+    
+    - name: Debug Show Network Adapter Name Stored
+      ansible.builtin.debug:
+        msg: "Stored Name: {{ ipv4.iface.name }}"
+      when:
+        - debug|default(false)
+
+    - name: Copy network config file template
+      template:
+        src: interfaces.j2
+        dest: "{{ live_cd_mountpoint }}/etc/network/interfaces"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create resolv.conf file from template
+      template:
+        src: resolv.conf.j2
+        dest: "{{ live_cd_mountpoint }}/etc/resolv.conf"
+
+    - name: Remove default apt lists
+      ansible.builtin.file:
+        name: "{{ live_cd_mountpoint }}/etc/apt/sources.list"
+        state: absent
+
+    - name: Setup apt sources for Debian
+      ansible.builtin.template:
+        src: sources.list.j2
+        dest: "{{ live_cd_mountpoint }}/etc/apt/sources.list.d/{{ distro_release }}.list"
+        owner: root
+        group: root
+        mode: '0644'
+
+###############################################################################
+# [ Setup chroot Environment ]#################################################
+# Bind Virtual Filesystem from Live CD to New environment
+# NOTE: Not using ansible mount module as we don't want these added to fstab
+- name: Setup chroot Environment Block
+  when:
+    - ansible_nodename != "localhost"
+  tags:
+    - config_system
+  block:
+    - name: Refresh all mountpoints
+      ansible.builtin.mount_facts:
+        include_aggregate_mounts: true
+        sources: all
+    - name: Binding virtual file systems
+      ansible.posix.mount:
+        path: "{{ item.target }}"
+        src: "{{ item.source }}"
+        fstype: "{{ item.fstype }}"
+        opts: "{{ item.options }}"
+        state: ephemeral
+      loop:
+        - { options: '',     fstype: 'proc',   source: '/proc', target: '{{ live_cd_mountpoint }}/proc'}
+        - { options: '',     fstype: 'sysfs',  source: 'sys',   target: '{{ live_cd_mountpoint }}/sys'}
+        - { options: 'bind', fstype: '',       source: '/dev',  target: '{{ live_cd_mountpoint }}/dev'}
+        - { options: '',     fstype: 'devpts', source: 'pts',   target: '{{ live_cd_mountpoint }}/dev/pts'}
+      when:
+        - item.target not in ansible_facts['mount_points']
+
+
+    ###############################################################################
+    # [ Apply APT-Cacher-NG Configuration ]########################################
+    # If an APT caching proxy server is available set this up early to reduce
+    # bandwidth requirements when downloading packages to install. This task will
+    # create file: /mnt/etc/apt/apt.conf.d/01proxy
+
+    - name: Apply Apt-Cacher-NG Configuration Update
+      ansible.builtin.template:
+        src: "apt_01proxy.j2"
+        dest: "{{ live_cd_mountpoint }}/etc/apt/apt.conf.d/01proxy"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      when:
+        - apt_http_proxy is defined or
+          apt_https_proxy is defined
+
+    - name: Get UIDs of users
+      ansible.builtin.getent:
+        database: passwd
+        key: ansible
+    
+    - name: Debug Show User ID of User ansible
+      ansible.builtin.debug:
+        msg: "{{ getent_passwd['ansible'].1 }}"
+      when:
+        - debug|default(false)
+    
+    - name: Check if user ansible already exists
+      ansible.builtin.command:
+        cmd: "{{ chroot_cmd }} bash -c 'if grep -q \"ansible\" /etc/passwd; then echo 1; else echo 0; fi'"
+      register: user_exists
+
+    - name: Debug Show user_exists
+      ansible.builtin.debug:
+        msg: "{{ user_exists.stdout | int }}"
+      when:
+        - debug|default(false)
+
+    - name: Remove ansible user if already existing
+      ansible.builtin.command:
+        cmd: "{{ chroot_cmd }} bash -c 'userdel -r ansible'"
+      when:
+        - user_exists.stdout | int == 1
+
+    - name: Add ansible user to chroot environment
+      ansible.builtin.command:
+        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+      no_log: true
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      with_items:
+        - "useradd -G sudo -u {{ getent_passwd['ansible'].1 }} -s /bin/bash --create-home --home-dir /home/ansible ansible"
+        - "echo \"ansible:ansible\" | chpasswd"
+        - "echo \"ansible ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers.d/99_sudo_include_file"
+
+    - name: Copy SSH Server Keys into chroot
+      ansible.builtin.copy: 
+        dest: "{{ live_cd_mountpoint }}/etc/ssh/{{ item.name }}"
+        src: "/etc/ssh/{{ item.name }}"
+        remote_src: true
+        mode: "{{ item.permission }}"
+        owner: root
+        group: root
+      loop:
+        - { name: 'ssh_host_ecdsa_key', permission: '600' }
+        - { name: 'ssh_host_ecdsa_key.pub', permission: '644' }
+        - { name: 'ssh_host_ed25519_key', permission: '600' }
+        - { name: 'ssh_host_ed25519_key.pub', permission: '644' }
+        - { name: 'ssh_host_rsa_key', permission: '600' }
+        - { name: 'ssh_host_rsa_key.pub', permission: '644' }
+
+    - name: Copy SSH User Keys for User "ansible"
+      ansible.builtin.copy: 
+        dest: "{{ live_cd_mountpoint }}/home/ansible/.ssh/"
+        src: "/home/ansible/.ssh/{{ item.name }}"
+        remote_src: true
+        mode: "{{ item.permission }}"
+        owner: ansible
+        group: ansible
+      loop:
+        - { name: 'authorized_keys', permission: '600' }
+
+
+###############################################################################

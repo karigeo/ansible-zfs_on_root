@@ -11,7 +11,7 @@ ANSIBLE_USER=ansible
 # Create ansible account and a home directory to store SSH keys
 echo
 echo "-----------------------------------------------------------------------------"
-sudo useradd -m $ANSIBLE_USER
+sudo useradd -m $ANSIBLE_USER -s /bin/bash
 if [[ $? -ne 0 ]]; then 
   echo ERROR: was unable to add $ANSIBLE_USER user, already created?
 else
@@ -32,7 +32,7 @@ if [[ $? -ne 0 ]]; then
 fi
 
 # install SSH Server and Python to allow ansible to connect
-sudo apt install --yes openssh-server vim python3 python3-apt mdadm
+sudo apt install --yes openssh-server vim python3 python3-apt python3-pexpect mdadm btop htop
 if [[ $? -ne 0 ]]; then
   echo
   echo "ERROR: installing required packages failed."
@@ -44,6 +44,17 @@ sudo swapoff -a
 
 # Disable automounting, if disk has been used before it will be mounted if not disabled
 gsettings set org.gnome.desktop.media-handling automount false
+
+# Disable hibernating, suspend, etc on Debian Live CD:
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+
+# # Run btop and kill it directly after start just to initialize btop.conf
+# btop &
+# sleep 2
+# kill $!
+
+# # Change Colormode to 256 colors (Truecolor is broken on Mac terminal)
+# sed -i "/truecolor/s/\bTrue\b/False/g" ~/.config/btop/btop.conf 
 
 # See if we are in a terminal or pipe
 if [[ ! -p /dev/stdin ]]; then
@@ -76,4 +87,9 @@ else
   echo "Once that has been completed, you can push your ansible ssh key to this"
   echo "instance from the Ansible Control node."
 fi 
+echo "-----------------------------------------------------------------------------"
+echo "IMPORTANT: IP address and hostname of live system should already match the"
+echo "           later system. Otherwise some issues can occur during setup when"
+echo "           running sudo tasks in chroot."
+echo "-----------------------------------------------------------------------------"
 # Done

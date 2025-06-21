@@ -6,8 +6,8 @@
 
 This will mount all pools and file systems under `/mnt` directory.
 
-1. Boot the Ubuntu Live CD:
-    * Select option <button name="button">Try Ubuntu</button>.
+1. Boot the Debian Live CD:
+    * Select option <button name="button">Live</button>.
     * Open a terminal within the Live CD environment - press <kbd>Ctrl</kbd> <kbd>Alt</kbd>-<kbd>T</kbd>.
 
 2. Become Root
@@ -92,6 +92,6 @@ This will mount all pools and file systems under `/mnt` directory.
     zpool export -a
     ```
 
-It is now safe to exit Ubuntu Live CD and reboot system, hopefully you fixed your issues and can boot. If not repeat the steps above and keep on Googling that problem. :)
+It is now safe to exit Debian Live CD and reboot system, hopefully you fixed your issues and can boot. If not repeat the steps above and keep on Googling that problem. :)
 
 [Back to README.md](../README.md)

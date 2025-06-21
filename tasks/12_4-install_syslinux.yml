@@ -6,23 +6,45 @@
   tags:
     - install_syslinux
   block:
-    - name: Run chroot command to install Syslinux Boot Loader
+    - name: Create Syslinux Directory
+      ansible.builtin.file:
+        state: directory
+        path: "{{ syslinx_path }}"
+        owner: root
+        group: root
+
+    - name: Install Syslinux Packages
+      ansible.builtin.apt:
+        name: 
+          - syslinux
+          - syslinux-common
+          - extlinux
+          - dosfstools
+          - unzip
+        state: present
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: Copy Syslinux Files in place
+      ansible.builtin.copy:
+        dest: "{{ syslinx_path }}"
+        remote_src: true
+        src: "/usr/lib/syslinux/modules/bios/"
+
+    - name: Run command to install Syslinux Boot Loader
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: "{{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
-        - "mkdir -p {{ syslinx_path }}"
-        - "apt-get install --yes syslinux syslinux-common extlinux dosfstools unzip"
-        - "cp -r /usr/lib/syslinux/modules/bios/* {{ syslinx_path }}"
         # Install extlinux
         - "extlinux --install {{ syslinx_path }}"
       when:
         - ansible_os_family == "Debian"
 
-    - name: Run chroot command to install the syslinux GPTMBR data on each disk device
+    - name: Run command to install the syslinux GPTMBR data on each disk device
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c 'dd bs=440 count=1 conv=notrunc if=/usr/lib/syslinux/mbr/gptmbr.bin of={{ item }}'"
+        cmd: "dd bs=440 count=1 conv=notrunc if=/usr/lib/syslinux/mbr/gptmbr.bin of={{ item }}"
       register: cmd_output
       changed_when:
         cmd_output.rc == 0
@@ -32,12 +54,11 @@
 
     - name: Copy Logo Images and Icons
       ansible.builtin.copy:
-        src: "files/{{ item.source }}"
-        dest: "{{ live_cd_mountpoint }}/{{ item.dest }}"
+        src: "{{ refind_path }}/themes/{{ refind_theme_name }}/background.png"
+        dest: "{{ syslinx_path }}/"
+        remote_src: true
         owner: "root"
         group: "root"
         mode: "0644"
-      with_items:
-        - { source: "logo_sm.jpg", dest: "{{ syslinx_path }}/" }
       when:
-        - refind_boot_menu_logo  | default(false)
+        - refind_theming  | default(false)

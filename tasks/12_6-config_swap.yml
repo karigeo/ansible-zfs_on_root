@@ -4,23 +4,23 @@
   when:
     - ansible_nodename != "localhost"
     - enable_swap_partitions|default(true)|bool
-    - not root_pool_encryption|default(false)|bool
+    - disk_encryption_type == "none"
     - disk_by_id | length == 1
   tags:
     - config_swap
   block:
-    - name: Run chroot commands to Create Swap Filesystem for Single Disk Unencrypted
+    - name: Run commands to Create Swap Filesystem for Single Disk Unencrypted
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: "{{ item }}'"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
-        - "mkswap -f {{ disk_by_id[0] }}-part2"
-        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value {{ disk_by_id[0] }}-part2) none swap discard 0 0 >> /etc/fstab"
+        - "mkswap -f {{ disk_by_id[0] }}-part{{ swap_partition }}"
+        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value {{ disk_by_id[0] }}-part{{ swap_partition }}) none swap discard 0 0 >> /etc/fstab"
 
-    - name: Run chroot command to enable Unencrypted swap
+    - name: Run command to enable Unencrypted swap
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c 'swapon -a'"
+        cmd: "swapon -a"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
@@ -34,9 +34,9 @@
   tags:
     - config_swap
   block:
-    - name: Run chroot command to install mdadm for multi-disk swap
+    - name: Run command to install mdadm for multi-disk swap
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c 'apt install --yes mdadm'"
+        cmd: "apt install --yes mdadm"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       when:
@@ -49,7 +49,7 @@
       when:
         - disk_by_id | length | int == 2
 
-    - name: See if raid should be used
+    - name: See if raid5 should be used
       ansible.builtin.set_fact:
         mdadm_type: "raid5"
       when:
@@ -58,16 +58,16 @@
     # Create a list of swap device partitions to use
     - name: Create a list of swap device partitions to use
       ansible.builtin.set_fact:
-        mdadm_swap_device_list: "{{ mdadm_swap_device_list | default('') }} {{ item }}-part2"
+        mdadm_swap_device_list: "{{ mdadm_swap_device_list | default('') }} {{ item }}-part{{ swap_partition }}"
       loop:
         "{{ disk_by_id }}"
 
     # The "-R" - is needed to suppress the "Continue creating array?" prompt
-    - name: Run chroot command to create mdadm device for multi-disk swap
+    - name: Run command to create mdadm device for multi-disk swap
       ansible.builtin.command: >
-        {{ chroot_cmd }} bash -c 'mdadm --create --verbose /dev/md0 -R --metadata=1.2
+        mdadm --create --verbose /dev/md/swap -R --metadata=1.2
         --level={{ mdadm_type }} --raid-devices={{ disk_by_id | length | int }} {{ mdadm_swap_device_list }}
-        --homehost={{ inventory_hostname_short }}'
+        --homehost={{ host_name }}
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
@@ -77,19 +77,19 @@
   when:
     - ansible_nodename != "localhost"
     - enable_swap_partitions | default(true) | bool
-    - not root_pool_encryption | default(false) | bool
+    - disk_encryption_type == "none"
     - disk_by_id | length | int > 1
   tags:
     - config_swap
   block:
-    - name: Run chroot command to create swap filesystem for multi-disk mdadm device
+    - name: Run command to create swap filesystem for multi-disk mdadm device
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: "{{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
-        - "mkswap -f /dev/md0"
-        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value /dev/md0) none swap discard 0 0 >> /etc/fstab"
+        - "mkswap -f /dev/md/swap"
+        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value /dev/md/swap) none swap discard 0 0 >> /etc/fstab"
 
 ###############################################################################
 # [ Single or Multi Disk Encrypted Swap Configuration ]########################
@@ -97,13 +97,13 @@
   when:
     - ansible_nodename != "localhost"
     - enable_swap_partitions|default(true)|bool
-    - root_pool_encryption|default(false)|bool
+    - disk_encryption_type == "luks" or disk_encryption_type == "native"
   tags:
     - config_swap
   block:
-    - name: Run chroot command to install cryptsetup on Debian based systems
+    - name: Run command to install cryptsetup on Debian based systems
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c 'apt install --yes cryptsetup'"
+        cmd: "apt install --yes cryptsetup"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
@@ -111,26 +111,26 @@
         - ansible_os_family == "Debian"
 
     # Work for Encrypted Single Disk SWAP
-    - name: Run chroot command to add single disk encrypted swap partitions to /etc/crypttab
+    - name: Run command to add single disk encrypted swap partitions to /etc/crypttab
       ansible.builtin.shell:
-        cmd: "{{ chroot_cmd }} bash -c 'echo swap {{ disk_by_id[0] }}-part2 /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab'"
+        cmd: "echo crypt_swap {{ disk_by_id[0] }}-part{{ swap_partition }} /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       when:
         - disk_by_id | length | int == 1
 
     # Work for Multi Disk Encrypted SWAP
-    - name: Run chroot commands to add multi-disk encrypted swap partitions to /etc/crypttab
+    - name: Run commands to add multi-disk encrypted swap partitions to /etc/crypttab
       ansible.builtin.shell:
-        cmd: "{{ chroot_cmd }} bash -c 'echo swap /dev/md0 /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab'"
+        cmd: "echo crypt_swap /dev/md/swap /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       when:
         - disk_by_id | length | int > 1
 
-    - name: Run chroot command to add swap device map to /etc/fstab (Single or Multi Disk)
+    - name: Run command to add swap device map to /etc/fstab (Single or Multi Disk)
       ansible.builtin.shell:
-        cmd: "{{ chroot_cmd }} bash -c 'echo /dev/mapper/swap none swap defaults 0 0 >> /etc/fstab'"
+        cmd: "echo /dev/mapper/crypt_swap none swap defaults 0 0 >> /etc/fstab"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 

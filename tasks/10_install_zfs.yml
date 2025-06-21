@@ -8,26 +8,46 @@
   tags:
     - install_zfs
   block:
-    - name: Run chroot command for apt update
-      ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c 'apt-get -qq update'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    - name: Install Kernel Driver Packages
+      ansible.builtin.apt:
+        name:
+          - software-properties-common
+          - dkms
+        install_recommends: false
       when:
         - ansible_os_family == "Debian"
 
-    - name: Install ZFS into chroot
-      ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      with_items:
-        - "apt-get install --yes --no-install-recommends software-properties-common debconf-utils"
-        - "apt-get install --yes --no-install-recommends
-          {{ enable_ubuntu_lts_hwe | ternary('linux-generic-hwe-' + ubuntu_version + ' linux-headers-generic-hwe-'
-          + ubuntu_version + ' linux-image-generic-hwe-' + ubuntu_version, 'linux-generic linux-headers-generic linux-image-generic') }}"
-        - "apt-get install --yes --no-install-recommends mdadm wget nano vim"
-        - "apt-get install --yes --no-install-recommends zfsutils-linux zfs-zed zfs-initramfs"
+    - name: Ensure ZFS update rebuilds all initramfs
+      ansible.builtin.copy:
+        dest: /etc/dkms/zfs.conf
+        content: REMAKE_INITRD=yes
+        mode: '0644'
+
+    - name: Install further required Software and ZFS into chroot
+      ansible.builtin.apt:
+        name:
+          - linux-headers-generic
+          - linux-image-generic
+          - dropbear-initramfs
+          - wget
+          - nano
+          - vim
+          - bridge-utils
+          - lvm2
+          - zfsutils-linux
+          - zfs-zed
+          - zfs-initramfs
+          - zfs-dkms
+        install_recommends: false
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: Purge os-prober
+      ansible.builtin.apt:
+        name:
+          - os-prober
+        state: absent
+        purge: true
       when:
         - ansible_os_family == "Debian"
 
@@ -38,14 +58,23 @@
         state: absent
         path: "{{ item }}"
       loop:
-        - "{{ live_cd_mountpoint }}/boot/vmlinuz.old"
-        - "{{ live_cd_mountpoint }}/boot/initrd.img.old"
+        - "/boot/vmlinuz.old"
+        - "/boot/initrd.img.old"
 
-    - name: Ensure cachefile exists and zfs-import-cache is active
+    - name: Ensure cachefile exists
       ansible.builtin.command:
-        cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
+        cmd: "{{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
         - "zpool set cachefile=/etc/zfs/zpool.cache {{ root_pool_name }}"
-        - "systemctl enable zfs.target zfs-import-cache zfs-mount zfs-import.target"
+
+    - name: Ensure zfs-import-cache is active
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+      loop:
+        - zfs.target
+        - zfs-import-cache
+        - zfs-mount
+        - zfs-import.target

@@ -1,17 +1,19 @@
 ---
-# This configuration is designed to Ubuntu 22.04, it is not backward compatible to older versions.
+# This configuration is designed to install Debian Bookworm.
 
 ####### Nothing Below Here Needs to be Edited ############
+debug: true
 
-# Ubuntu Release name
-ubuntu_release: "jammy"
-distro_name: "ubuntu"
-ubuntu_version: "22.04"
+# Distro Release name
+distro_release: "bookworm"
+distro_name: "debian"
+distro_version: "12.9"
 
 # Define Partition Mapping
 boot_partition: "1"
 swap_partition: "2"
 root_partition: "3"
+lvm_partition: "4"
 
 # Define EFI System Partition (ESP) Size in MB
 boot_partition_size_mb: "512"
@@ -23,13 +25,18 @@ uefi_partition_flags: "-a1 -n{{ boot_partition }}:1M:+{{ boot_partition_size_mb 
 single_disk_or_mirror_swap_flags: "-n{{ swap_partition }}:0:+{{ single_or_mirror_swap_partition_size_mb }}M -t{{ swap_partition }}:8200"
 raidz_multi_disk_swap_flags: "-n{{ swap_partition }}:0:+{{ raidz_swap_partition_size_mb }}M -t{{ swap_partition }}:FD00"
 
-# Define Root Pool Partition Flags - for Unencrypted or ZFS native Encryption
-root_partition_flags: "-n{{ root_partition }}:0:{{ root_partition_size }} -t{{ root_partition }}:BF00"
+# Define Root Pool Partition Flags
+root_partition_flags: "-n{{ root_partition }}:0:{{ root_partition_size }} -t{{ root_partition }}"
 
 # Define Pool Partition Suffixes
 root_partition_name_suffix: "-part{{ root_partition }}"
 
-# Enable native ZFS root pool encryption (default false) - This will be set to true when a passphrase
+# Define LVM Pool Partition Flags based on one device or more
+single_disk_or_mirror_lvm_partition_type: "{{ '8e00' if disk_encryption_type == 'none' else '8309' if disk_encryption_type == 'luks' or disk_encryption_type == 'native' }}"
+single_disk_or_mirror_lvm_flags: "-n{{ lvm_partition }}:0:{{ single_or_mirror_lvm_partition_size }} -t{{ lvm_partition }}:{{ single_disk_or_mirror_lvm_partition_type }}"
+raidz_multi_disk_lvm_flags: "-n{{ lvm_partition }}:0:{{ raidz_lvm_partition_size }} -t{{ lvm_partition }}:FD00"
+
+# Enable root pool encryption (default false) - This will be set to true when a passphrase
 # is specified as an extra variable.
 root_pool_encryption: false
 
@@ -57,8 +64,11 @@ root_pool_encryption_options:
   - "-o keyformat=passphrase"
 
 # Define rpool zpool create parameters list
+root_pool_device_names:
+  "{{ (disk_encryption_type == 'luks') | ternary(['/dev/mapper/crypt_'] | product(disk_by_id|map('regex_search','([^\/]+$)')|list) | map('join','') | product(['_root']) | map('join','') | join(' ') + ' ',disk_by_id | join(root_partition_name_suffix + ' ') + root_partition_name_suffix + ' ') }}"
+
 root_pool_create_params:
-  "{{ root_pool_options | join(' ') }} {{ root_pool_type }} {{ disk_by_id | join(root_partition_name_suffix + ' ') + root_partition_name_suffix + ' ' }}"
+  "{{ root_pool_options | join(' ') }} {{ root_pool_type }} {{ root_pool_device_names }}"
 
 root_pool_container_options:
   - "-o canmount=off"
@@ -66,7 +76,7 @@ root_pool_container_options:
   - "{{ ' ' + (root_pool_encryption | default(false)) | ternary(root_pool_encryption_options | join(' '), '') }}"
   - "{{ root_pool_name }}/ROOT"
 
-root_pool_dataset_path: "{{ root_pool_name }}/ROOT/{{ distro_name }}"
+root_pool_dataset_path: "{{ root_pool_name }}/ROOT/{{ root_dataset_name }}"
 root_dataset_options:
   - "-o mountpoint=/"
   - "-o canmount=noauto"
@@ -80,22 +90,19 @@ datasets_to_create:
   - "{{ root_pool_dataset_path }}/usr/local"
   - "-o canmount=off {{ root_pool_dataset_path }}/var"
   - "-o com.sun:auto-snapshot=false {{ root_pool_dataset_path }}/var/cache"
-  - "{{ root_pool_dataset_path }}/var/games"
   - "-o canmount=off {{ root_pool_dataset_path }}/var/lib"
-  - "{{ root_pool_dataset_path }}/var/lib/AccountsService"
-  - "{{ root_pool_dataset_path }}/var/lib/apt"
-  - "{{ root_pool_dataset_path }}/var/lib/dpkg"
-  - "-o com.sun:auto-snapshot=false {{ root_pool_dataset_path }}/var/lib/docker"
-  - "{{ root_pool_dataset_path }}/var/lib/NetworkManager"
   - "{{ root_pool_dataset_path }}/var/log"
   - "{{ root_pool_dataset_path }}/var/mail"
-  - "{{ root_pool_dataset_path }}/var/snap"
   - "{{ root_pool_dataset_path }}/var/spool"
   - "-o com.sun:auto-snapshot=false {{ root_pool_dataset_path }}/var/tmp"
   - "{{ root_pool_dataset_path }}/var/www"
   # Home Directory Dataset will be kept outside of OS Dataset
   - "-o canmount=on -o mountpoint=/home -o compression={{ zfs_compression }} -o atime=off {{ root_pool_home_dataset_path }}"
   - "-o canmount=on -o mountpoint=/root {{ root_pool_home_dataset_path }}/root"
+  # PVE specific datasets:
+  - "{{ root_pool_dataset_path }}/var/lib/vz"
+  - "-o canmount=on -o mountpoint=/etc/pve  {{ root_pool_dataset_path }}/etc-pve"
+  - "-o canmount=on -o mountpoint=/{{ root_pool_name }}/data {{ (root_pool_encryption | default(false)) | ternary(root_pool_encryption_options | join(' '), '') }} {{ root_pool_name }}/data"
 
 ###############################################################################
 # [ Variable below are unrelated to ZFS ]######################################
@@ -128,10 +135,8 @@ syslinx_path: "{{ efi_boot_mountpoint }}/syslinux"
 remove_os_prober: true
 
 # Packages required to be held (not installed or updated) that conflict with
-# Dract and or rEFInd Packages
+# rEFInd Packages
 packages_to_mark_hold:
-  - "zfs-initramfs"
-  - "initramfs-tools"
   - "grub-efi-amd64"
   - "grub-efi-amd64-signed"
   - "grub-efi-amd64-bin"

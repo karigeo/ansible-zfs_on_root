@@ -3,11 +3,16 @@
 
 - name: Create Disk Partitions Block
   when:
-    ansible_nodename != "localhost"
+    - ansible_nodename != "localhost"
+    #- (disk_encryption_type == "native") or (disk_encryption_type == "none") #this seems to be a remainder and possibly can be deleted
   tags:
     - create_partitions
 
   block:
+    - name: Decide if Partitions are LUKS encypted, ZFS native encrypted or unencrypted
+      ansible.builtin.set_fact:
+        root_partition_type: "{{ 'BF00' if disk_encryption_type == 'native' or disk_encryption_type == 'none' else '8309' if disk_encryption_type == 'luks' }}"
+
     # This is created for UEFI booting
     - name: Create UEFI Boot Loader Partitions
       ansible.builtin.command:
@@ -30,11 +35,22 @@
 
     - name: Create Root Pool Partitions
       ansible.builtin.command:
-        cmd: "sgdisk {{ root_partition_flags }} {{ item }}"
+        cmd: "sgdisk {{ root_partition_flags }}:{{ root_partition_type }} {{ item }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
       loop:
         "{{ disk_by_id }}"
+    
+    # 1 or 2 devices = single or mirror flags, 3 or more use raid flags
+    - name: Create LVM Partitions
+      ansible.builtin.command:
+        cmd: "sgdisk {{ (disk_by_id | length | int > 2) | ternary(raidz_multi_disk_lvm_flags, single_disk_or_mirror_lvm_flags) }} {{ item }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      loop:
+        "{{ disk_by_id }}"
+      when:
+        - create_lvm_partition | default(true) | bool
 
     - name: Wait for kernel notification of changes to be processed
       ansible.builtin.command:

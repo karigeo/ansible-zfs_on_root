@@ -8,14 +8,14 @@ Global:
   InitCPIOConfig: /etc/zfsbootmenu/mkinitcpio.conf
 Components:
   ImageDir: {{ zfs_boot_menu_path }}
-  Versions: 3
+  Versions: false
   Enabled: true
   syslinux:
     Config: {{ syslinx_path }}/syslinux.cfg
     Enabled: false
 EFI:
   ImageDir: {{ zfs_boot_menu_path }}
-  Versions: 2
+  Versions: false
   Enabled: false
 Kernel:
   CommandLine: zbm.prefer={{ root_pool_name }} ro loglevel=0

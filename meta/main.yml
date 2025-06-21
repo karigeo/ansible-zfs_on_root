@@ -1,15 +1,14 @@
 ---
 galaxy_info:
-  author: Richard Durso
+  author: Simon Nibler
   description: |
-    ZFS on Root for Ubuntu 22.04 with rules based on device numbers presented.
-    Native ZFS Encryption, UEFI, multiple non-root accounts, Dropbear support and some SSH tweaks.
+    ZFS on Root for Debian 12 with rules based on device numbers presented.
+    Native ZFS Encryption, LUKS Encryption, UEFI, Dropbear support and some SSH tweaks.
 
   platforms:
-    - name: Ubuntu
-      release: jammy
-#      versions:
-#        - 22.04
+    - name: Debian
+      release: bookworm
+
 
   license: "license (BSD, MIT)"
 
@@ -17,12 +16,9 @@ galaxy_info:
 
   galaxy_tags:
     - zfs
-    - ubuntu
+    - debian
     - uefi
     - nonroot
     - dropbear
     - baremetal
 
-dependencies:
-  # Ansible role deploys msmtp as a mailer for Debian, Ubuntu
-  - role: chriswayg.msmtp-mailer

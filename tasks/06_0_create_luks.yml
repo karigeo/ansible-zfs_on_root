@@ -1,0 +1,34 @@
+---
+###############################################################################
+# ###[Create LUKS Containers if selected]######################################
+# This block creates LUKS pcontainer(s) on each device, if LUKS encryption is selected.
+
+- name: Create LUKS Containers
+  when:
+    - ansible_nodename != "localhost"
+    - disk_encryption_type == "luks"
+  tags:
+    - create_luks_containers
+  block:
+    - name: Create LUKS containers for root
+      community.crypto.luks_device:
+        device: "{{ item }}-part{{ root_partition }}"
+        state: "opened"
+        name: "crypt_{{ item | regex_search('([^\/]+$)') }}_root" #regex to find everything after last occurance of '/' --> find disk-id name
+        cipher: "aes-xts-plain64"
+        keysize: 512
+        hash: "sha256"
+        passphrase: "{{ passphrase }}"
+      loop: "{{ disk_by_id }}"
+
+    # - name: Create LUKS containers for LVM partitions
+    #   when: create_lvm_partition | bool
+    #   community.crypto.luks_device:
+    #     device: "{{ item }}-part{{ lvm_partition }}"
+    #     state: "opened"
+    #     name: "crypt_{{ item | regex_search('([^\/]+$)') }}_lvm" #regex to find everything after last occurance of '/' --> find disk-id name
+    #     cipher: "aes-xts-plain64"
+    #     keysize: 512
+    #     hash: "sha256"
+    #     passphrase: "{{ passphrase }}"
+    #   loop: "{{ disk_by_id }}"

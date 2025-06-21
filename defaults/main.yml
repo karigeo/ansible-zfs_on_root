@@ -3,7 +3,7 @@
 # Ansible Specific Settings
 ###############################################################################
 # Don't log secret like ZFS on Root Password when running playbook
-no_log_secrets: true
+no_log_secrets: false
 
 ###############################################################################
 # User Settings
@@ -12,16 +12,7 @@ no_log_secrets: true
 # This is a temporary root password used during the build process.
 # Root password will be disabled during the final stages.
 # The non-root user account will have sudo privileges
-default_root_password: "change!me"
-
-# Define non-root user account(s) to create (home drives will be its own dataset)
-# Each user will be required to change password upon first login
-regular_user_accounts:
-  - user_id: "rich"
-    password: "change!me"
-    full_name: "Richard Durso"
-    groups: "adm,cdrom,dip,lpadmin,lxd,plugdev,sambashare,sudo"
-    shell: "/bin/bash"
+default_root_password: "root"
 
 ###############################################################################
 # Computer Configuration Settings
@@ -30,25 +21,56 @@ regular_user_accounts:
 domain_name: "localdomain"
 
 # rEFInd Boot Menu Timeout by default is 20 seconds.
-refind_boot_menu_timeout: "10"
+refind_boot_menu_timeout: "5"
 
-# Enables background image for refind / syslinux (see files/logo.jpg)
-refind_boot_menu_logo: true
+# Specify rEFInd display resolution to use (width height)
+# Default is "0 0", which sets system default resolution
+# "max" tries to set the maximum possible resolution
+refind_resolution: "0 0"
 
-# For Full GUI Desktop installation (set to false) or command-line only server
-# environment (set to true)
-command_line_only: true
+# Enables background image for refind
+# ATTENTION: file "theme.conf" has to be placed in the themes folder to configure the skin!
+refind_theming: true
+refind_theme_name: refind-ambience
+refind_theme_repo: https://github.com/karigeo/refind-ambience
 
-# The Ubuntu LTS enablement (also called HWE or Hardware Enablement) stacks
-# provide newer kernel and X support for existing Ubuntu LTS releases.
-enable_ubuntu_lts_hwe: false
+# Specify dirs, which should not be scanned by rEFInd: 
+# (comma separated list)
+refind_no_scan_dirs: "{{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}"
 
-# Define the local pre-fix to enable in /etc/locale.gen
-locale_prefix: "en_US.UTF-8"
+# Define the locale to be set with dpkg-reconfigure
+default_locale: "en_US.UTF-8"
 
-# Define the timezone to be placed in /etc/timezone
-timezone_value: "America/New_York"
+# Define the timezone to be set with dpkg-reconfigure
+timezone_area: "Europe"
+timezone_city: "Berlin"
 
+# Define Keyboard Configuration to set with dpkg-reconfigure
+keyboard_model: "Generic 105-key PC"
+keyboard_variant: "German"
+keyboard_layout: "German"
+keyboard_altgr: "The default for the keyboard layout"
+keyboard_compose: "No compose key"
+keyboard_killx: true
+
+# Define additional packages to install once the build has completed.
+additional_install_packages:
+  - man
+  - udisks2
+  - pciutils
+  - net-tools
+  - ethtool
+  - htop
+  - btop
+  - pollinate
+  - fwupd
+  - needrestart
+  - unattended-upgrades
+  - lz4
+
+###############################################################################
+# Network Configuration
+###############################################################################
 # Disable IPv6 if you do not use it.  The "disable_settings" will be applied to
 # "conf_file"
 ipv6:
@@ -60,49 +82,27 @@ ipv6:
     - "net.ipv6.conf.lo.disable_ipv6 = 1"
   apply_cmd: "sysctl -p"
 
-# Define additional packages to install once the build has completed.
-additional_install_packages:
-  - man
-  - udisks2
-  - pciutils
-  - net-tools
-  - ethtool
-  - fonts-ubuntu-console
-  - htop
-  - pollinate
-  - fwupd
-  - needrestart
-  - unattended-upgrades
-  - lz4
-
-# Enable and Define SMTP Email Alerts for System
-# msmtp is a simple and easy to use SMTP client
-# https://github.com/chriswayg/ansible-msmtp-mailer
-msmtp:
-  enabled: true
-  msmtp_domain: "gmail.com"
-  # Default email alias name to sent alerts to (required)
-  msmtp_alias_default: "{{ secret_msmpt_send_to_email | default('not defined within vars/secrets/main.yml') }}"
-  # Optional Email alias address to redirect "root" emails to
-  # msmtp_alias_root: "other.account.for.root@gmail.com"
-  # Optional Email alias address to redirect "cron" emails to
-  # msmtp_alias_cron: "other.account.for.cron@gmail.com"
-
-  msmtp_default_account: "gmail"
-  accounts:
-    - account: "gmail"
-      host: "smtp.gmail.com"
-      port: "587"
-      auth: "on"
-      from: "{{ secret_msmtp_send_from_email | default('not defined within vars/secrets/main.yml') }}"
-      user: "{{ secret_msmtp_auth_user | default('not defined within vars/secrets/main.yml') }}"
-      password: "{{ secret_msmtp_auth_password | default('not defined within vars/secrets/main.yml') }}"
+# As this is mainly intended to install Proxmox, we should define a static IP and a VLAN aware bridge
+# address_type can be "manual" "static" or "dhcp"
+ipv4:
+  iface:
+    name: eno1
+    address_type: manual
+    network_address: none
+    gateway: none
+  bridge:
+    name: vmbr0
+    address_type: static
+    network_address: "192.168.100.10/24"
+    gateway: 192.168.100.1
+  dns_nameserver: 192.168.100.1
+  dns_search_domain: my.do.main
 
 ###############################################################################
 # Swap Partition Settings
 ###############################################################################
 # Create Swap Partitions
-enable_swap_partitions: false
+enable_swap_partitions: true
 
 # Swap partition size when one or two devices are used
 single_or_mirror_swap_partition_size_mb: "4096"
@@ -112,11 +112,29 @@ single_or_mirror_swap_partition_size_mb: "4096"
 raidz_swap_partition_size_mb: "1024"
 
 ###############################################################################
+# Disk Encryption Settings
+###############################################################################
+# Prompt for Encryption Passphrase.  if true, then prompt for
+# passphrase if not provided.
+prompt_for_zfs_passphrase: true
+
+# Specify wether to use LUKS or ZFS native encryption.
+# If an additional LVM Volume is defined, it's encryption will always be LUKS
+# "native" for ZFS native encryption
+# "luks" for LUKS encryption
+# "none" for no encryption
+disk_encryption_type: luks
+
+###############################################################################
 # Root Pool Settings
 ###############################################################################
 # Define Pool Names - can be set to whatever you like.
 # Short hostname is default, this is like "rpool" in the previous methods.
-root_pool_name: "{{ host_name }}"
+root_pool_name: "rpool"
+
+# Name of the dataset for the root filesystem
+# {{ root_pool_name }}/ROOT/{{ root_dataset_name }}
+root_dataset_name: "pve-1"
 
 # Define ZFS default compression to enable
 zfs_compression: "lz4"
@@ -134,11 +152,30 @@ zfs_compression: "lz4"
 # "+256G" will create partition 256Gib in size
 # "-200M" will use all available space, minus 200Mib
 # "0" (zero) use all available space
-root_partition_size: "0"
+root_partition_size: "-200G"
 
-# Prompt for Native ZFS Encryption Passphrase.  if true, then prompt for
-# passphrase if not provided.
-prompt_for_zfs_passphrase: false
+###############################################################################
+# LVM Pool Settings
+###############################################################################
+# Define if additional LVM Partition should be created:
+create_lvm_partition: true
+
+# Define LVM Pool partition size
+# "+256G" will create partition 256Gib in size
+# "-200M" will use all available space, minus 200Mib
+# "0" (zero) use all available space
+
+# LVM partition size when one or two devices are used
+single_or_mirror_lvm_partition_size: "0"
+
+# LVM partition size, per device, when three or more devices are used.
+# Estimated size is:  #devices-1 * size
+raidz_lvm_partition_size: "0"
+
+lvm_vg_name: pve
+lvm_volume_name: data
+lvm_volume_is_thin: true
+lvm_volume_size: "99%VG"
 
 ###############################################################################
 # ZFS Specific Adjustable Settings
@@ -165,7 +202,7 @@ zfs_rpool_ashift: 12
 
 # Enable ZFS Pool Trim Service after creating
 # NOTE: false will create, just not enable by default.
-zfs_pool_trim_systemd_service_enable: false
+zfs_pool_trim_systemd_service_enable: true
 
 # Define ZFS Pool Trim Schedule (see systemd OnCalendar for valid options)
 zfs_pool_trim_systemd_oncalendar: "weekly"
@@ -204,11 +241,11 @@ apply_dropbear_settings:
   remoteaccess_ip_config: "dhcp"
   # Remote access static IP address to connect to ZFSBootMenu
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
-  remoteaccess_ip: "192.168.0.222"
+  remoteaccess_ip: "192.168.100.10"
   # Remote access subnet mask
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
   remoteaccess_netmask: "255.255.255.0"
   # Define the full path to public key(s) you want to include in Dropbear
   # Allow dracut / dropbear use main user authorized_keys for access
   # Note that login to dropbear is "root" regardless of which authorized_keys is used
-  public_key_for_dropbear: "/home/{{ regular_user_accounts[0].user_id }}/.ssh/authorized_keys"
+  public_key_for_dropbear: "/home/ansible/.ssh/authorized_keys"

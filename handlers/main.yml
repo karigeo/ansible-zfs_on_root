@@ -18,3 +18,33 @@
   with_items: "{{ accounts.results }}"
   loop_control:
     label: "{{ item.item.user_id }}"
+
+- name: Restart sshd
+  ansible.builtin.systemd:
+    name: sshd
+    state: restarted
+
+- name: reconf locales
+  ansible.builtin.command:
+    cmd: "dpkg-reconfigure --frontend noninteractive locales"
+  register: cmd_output
+  changed_when: cmd_output.rc == 0
+
+- name: reconf tzdata
+  ansible.builtin.command:
+    cmd: "dpkg-reconfigure --frontend noninteractive tzdata"
+  register: cmd_output
+  changed_when: cmd_output.rc == 0
+
+- name: reconf keyboard configuration
+  ansible.builtin.command:
+    cmd: "dpkg-reconfigure --frontend noninteractive keyboard-configuration"
+  register: cmd_output
+  changed_when: cmd_output.rc == 0
+
+- name: reconf console setup
+  ansible.builtin.command:
+    cmd: "dpkg-reconfigure --frontend noninteractive console-setup"
+  register: cmd_output
+  changed_when: cmd_output.rc == 0
+

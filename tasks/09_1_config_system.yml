@@ -1,0 +1,42 @@
+---
+###############################################################################
+# [ Should be in chroot env now ]##############################################
+
+- name: Configure new system in chroot environment
+  when:
+    - ansible_nodename != "localhost"
+  tags:
+    - config_system
+  block:
+    - name: Ensure all packages are up to date
+      ansible.builtin.apt:
+        upgrade: safe
+        force_apt_get: true
+        autoclean: true
+        autoremove: true
+        update_cache: true
+
+    - name: Install some requirements
+      ansible.builtin.apt:
+        name:
+          - console-setup
+          - locales
+          - dpkg-dev
+          - debconf
+          - debconf-utils
+          - mdadm
+          - dosfstools
+        state: present
+        install_recommends: false
+
+    - name: Purge os-prober
+      ansible.builtin.apt:
+        name:
+          - os-prober
+        state: absent
+        purge: true
+      when:
+        - ansible_os_family == "Debian"
+        - remove_os_prober == true
+        
+###############################################################################
