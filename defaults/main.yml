@@ -93,10 +93,10 @@ ipv4:
   bridge:
     name: vmbr0
     address_type: static
-    network_address: "10.11.12.20/24"
-    gateway: 10.11.12.1
-  dns_nameserver: 10.11.12.1
-  dns_search_domain: intern.bsicloud.de
+    network_address: "192.168.100.10/24"
+    gateway: 192.168.100.1
+  dns_nameserver: 192.168.100.1
+  dns_search_domain: my.do.main
 
 ###############################################################################
 # Swap Partition Settings
@@ -241,7 +241,7 @@ apply_dropbear_settings:
   remoteaccess_ip_config: "dhcp"
   # Remote access static IP address to connect to ZFSBootMenu
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
-  remoteaccess_ip: "10.11.12.20"
+  remoteaccess_ip: "192.168.100.10"
   # Remote access subnet mask
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
   remoteaccess_netmask: "255.255.255.0"
