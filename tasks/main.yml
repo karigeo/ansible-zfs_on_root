@@ -1,6 +1,6 @@
 ---
 ####################################################################################################
-# This script is for installing and configuring ZFS on Root from an Ubuntu Live CD.
+# This script is for installing and configuring ZFS on Root from an Debian Live CD.
 #
 # Usage: --extra-vars='{"disk_devices": [sda, sdb], host_name: "mynewpc", passphrase: "mys3cret"}
 #

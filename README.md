@@ -1,6 +1,8 @@
-# ZFS on Root For Ubuntu 22.04 LTS
+# ZFS on Root For Debian 12 Bookworm
 
-This Ansible role is my standardized ZFS on Root installation that I use as a base for all my systems.  Additional roles are applied on top of this to make the generic host a specialized Home Theater PC, Full Graphical Desktop, Kubernetes Cluster node, a headless Docker Server, etc...
+> This Role is a modifed version of [reefland/ansible-zfs_on_root](https://github.com/reefland/ansible-zfs_on_root)
+
+This Ansible role is used to setup / bootstrap a Debian 12 system with ZFS as root filesystem and ZFSBootMenu as Bootloader. Intentionally this is used to further setup a Proxmox Host on top.
 
 _NOTE: This Ansible role is not structured as rigid as a typical Ansible role should be.  Tips and suggestions on how to improve this are welcomed._
 
@@ -22,8 +24,6 @@ Originally based on the [OpenZFS ZFS on Root](https://openzfs.github.io/openzfs-
   * If encryption is enabled, LUKS is used to encrypt Swap partitions
 * Native ZFS Encryption Support
 * UEFI and Legacy Booting supported (can even switch between them)
-* Support for [Ubuntu Hardware Enablement](https://ubuntu.com/kernel/lifecycle) (newer kernel and hardware support)
-* Multiple non-root user account creation (each user gets own ZFS dataset)
 * Customized SSH Configuration Options
 * DropBear support for unlocking ZFS encrypted pool remotely
 * Support for Apt-Cacher-NG proxy for cached packages
@@ -32,28 +32,28 @@ Originally based on the [OpenZFS ZFS on Root](https://openzfs.github.io/openzfs-
 
 ## TL;DR
 
-* While this is a WORK IN PROGRESS, I've built many systems using various combinations.
-  * However not every combination has been tested.  If you find a problem, please open a GitHub issue in this repository.
+* This is a WORK IN PROGRESS:
+  * Not every combination has been tested.  If you find a problem, please open a GitHub issue in this repository.
   * Review [known issues](README.md#known-issues) for workarounds.
 
 * This Ansible based process is intended to be used against bare-metal systems or virtual machines (just needs SSH access to get started).
   * This is intended for initial installation ONLY, this is not for applying changes over time -- you should make those changes via some other playbook / change control system.
 * This process uses ENTIRE disk(s) and wipes partitions on the specified disks, any existing data on these partitions on the target system will be lost.
-* Review the `defaults/main.yml` to set temporary passwords,  non-root user account(s) and basic rules on boot partition sizes, swap partitions, etc.
-* Defaults to building a headless server environment, however a full graphical desktop can be enabled.
+* Review the `defaults/main.yml` to set temporary passwords,  basic rules on boot partition sizes, swap partitions, etc.
+* Defaults to building a headless server environment
 
 ---
 
 ## Environments Tested
 
-* Ubuntu 22.04.x Live CD Boot on Bare Metal or within VirtualBox
+* Debian 12.11.0 Live ISO (with LXQt) Boot on Bare Metal or within VirtualBox
 
 ---
 
 ## Requirements
 
 * [Ansible](https://www.ansible.com/) (Built with Ansible Core 2.12 or newer)
-* [Ubuntu 22.04.x "Jammy" Live CD](https://ubuntu.com/download/desktop/) (22.04 LTS Desktop - DO NOT use server images)
+* [Debian 12.11.x "Bookworm" Live CD](https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/) (Desktop - DO NOT use standard images)
   * _NOTE: you can configure for command-line only server build even when using the desktop image._
 * Computers that have less than 2 GiB of memory run ZFS slowly. 4 GiB of memory is recommended for normal performance in basic workloads.
 
@@ -82,19 +82,18 @@ Originally based on the [OpenZFS ZFS on Root](https://openzfs.github.io/openzfs-
 
 ---
 
-## WHY use THIS instead of Ubuntu's Installation Wizard
+## WHY use THIS?
 
-My intention for this to have a standardized and repeatable base install for my occasional one off builds.  However being based on Ansible this can be used to make batches of servers or desktops needing ZFS on Root installations.
+Besides being handy to have a repeatable installation possibility the manual process of installing a Debian system with ZFS on root is rather cumbersome. With Proxmox in mind, this gives the ability to have an enhanced partition layout and also be able to have an encrypted root without using the ZFS native encryption, which brings problems with ZFS replication.
 
 ### Configurable Rules
 
-This provides a configurable way to define how the ZFS installation will look like and allows for topologies that cannot be defined within the standard Ubuntu installation wizard.  
+This provides a configurable way to define how the ZFS installation will look like and allows for complex topologies.
 
 * For example:
   * If you always want a 3 disk setup to be a _raidz_ root pool, but a 4 disk setup should use multiple _mirrored_ vdev based root pool you can define these defaults.
 * The size of swap partitions can be defined to a standard value for single device and mirrored setups or a different value for raidz setup.
 * UEFI Booting is automatically enabled and will be used when detected, it will fall back to Legacy BIOS booting when not detected.
-* The installation is configurable to be a command-line only (server build) or Full Graphical Desktop installation.
 
 ### Optional ZFS Native Encryption
 
@@ -102,6 +101,8 @@ This provides a configurable way to define how the ZFS installation will look li
 
 * ZFS native encryption encrypts the data and _most_ metadata in the root pool. It does not encrypt dataset names, snapshot names or properties.
 * The system cannot boot without the passphrase being entered at the console. [Dropbear](docs/dropbear-settings.md) support can be enabled to allow remote SSH access at boot to enter passphrase remotely.
+
+Additionally you can also opt for LUKS encryption of the root filesystem.
 
 ### SSHD Configuration Settings
 
@@ -235,7 +236,6 @@ regular_user_accounts:
 * Review [ZFS Native Encryption Settings](docs/zfs-encryption-settings.md)
 * Review [Custom SSHD Configuration Settings](docs/custom-sshd-settings.md)
 * Review [DropBear Settings](docs/dropbear-settings.md)
-* Review [MSMTP client for SMTP Email notifications](docs/msmtp-settings.md)
 
 ### Additional Configuration Files
 
