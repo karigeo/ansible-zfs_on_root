@@ -28,7 +28,7 @@ refind_boot_menu_timeout: "5"
 # "max" tries to set the maximum possible resolution
 refind_resolution: "0 0"
 
-# Enables background image for refind / syslinux (see files/logo.jpg)
+# Enables background image for refind
 # ATTENTION: file "theme.conf" has to be placed in the themes folder to configure the skin!
 refind_theming: true
 refind_theme_name: refind-ambience

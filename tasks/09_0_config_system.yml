@@ -59,18 +59,6 @@
       loop_control:
         label: "{{ item }}.j2"
 
-    # Update Netplan Network file - not tested on multiple adapters, might break
-    # Works also on Debian Bookworm Live ISO with KDE
-    # - name: Get Network adapter name
-    #   ansible.builtin.shell: |
-    #     set -o pipefail
-    #     nmcli device status | grep 'ethernet' | grep 'connected' | cut -d' ' -f1
-    #   args:
-    #     executable: /bin/bash
-    #   changed_when: nic_name.rc == 0
-    #   register:
-    #     nic_name
-
     - name: Get Network adapter name from ansible facts
       ansible.builtin.set_fact:
         nic_name:
