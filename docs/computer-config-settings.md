@@ -24,25 +24,6 @@ By default rEFInd boot menu will wait 20 seconds for you take make a section.  T
 refind_boot_menu_timeout: "10"
 ```
 
-## CLI or Full Desktop
-
-Select if full graphical desktop or command-line server only.
-
-```yaml
-# For Full GUI Desktop installation (set to false) or command-line only server environment (set to true)
-command_line_only: true
-```
-
-## Enable Ubuntu LTS Hardware Enablement Kernel
-
-This provides newer kernels than the default LTS kernel.
-
-```yaml
-# The Ubuntu LTS enablement (also called HWE or Hardware Enablement) stacks
-# provide newer kernel and X support for existing Ubuntu LTS releases.
-enable_ubuntu_lts_hwe: false
-```
-
 ## Define Locale and Timezone
 
 Set your locale and timezone information.
@@ -92,45 +73,5 @@ additional_install_packages:
   - unattended-upgrades
   - lz4
 ```
-
-## MSMTP SMTP Email Client
-
-`msmtp` is a simple and easy to use SMTP client. This is intended for system SMTP notifications by the `root` user.  These variables are passed to an Ansible Galaxy role which can be reviewed at <https://github.com/chriswayg/ansible-msmtp-mailer>.
-
-Multiple email accounts can be defined, along with a default account to use.  Below shows a `gmail.com` configuration.  
-
-* Values for `from`, `user` and `password` are defined within `vars/secrets/main.yml`.
-* See [MSMTP Configuration Settings](msmtp-settings.md) for more details.
-
-```yaml
-msmtp:
-  enabled: true
-  msmtp_domain: "gmail.com"
-  # Default email alias name to sent alerts to (required)
-  msmtp_alias_default: "{{ secret_msmpt_send_to_email | default('not defined within vars/secrets/main.yml') }}"
-  # Optional Email alias address to redirect "root" emails to
-  # msmtp_alias_root: "other.account.for.root@gmail.com"
-  # Optional Email alias address to redirect "cron" emails to
-  # msmtp_alias_cron: "other.account.for.cron@gmail.com"
-
-  msmtp_default_account: "gmail"
-  accounts:
-    - account: "gmail"
-      host: "smtp.gmail.com"
-      port: "587"
-      auth: "on"
-      from: "{{ secret_msmtp_send_from_email | default('not defined within vars/secrets/main.yml') }}"
-      user: "{{ secret_msmtp_auth_user | default('not defined within vars/secrets/main.yml') }}"
-      password: "{{ secret_msmtp_auth_password | default('not defined within vars/secrets/main.yml') }}"
-```
-
-To send a test email once configured:
-
-```shell
-echo "test message" | sudo mailx -s "Test from $HOSTNAME" <somebody>@gmail.com
-```
-
-* Logs: `/var/log/msmtp.log`
-* Config: `/etc/msmtprc`
 
 [Back to README.md](../README.md)

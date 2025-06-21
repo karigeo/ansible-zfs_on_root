@@ -211,23 +211,6 @@ This temporary root password is only used during the build process.  The ability
 default_root_password: "change!me"
 ```
 
-#### Define the Non-Root Account(s)
-
- Define your standard privileged account(s).  The root account password will be disabled at the end, the privileged account(s) defined here must have `sudo` privilege to perform root activities. You will be forced to change this password upon first login. (Additional accounts can be defined).
-
-NOTE: The `~/.ssh/authorized_keys` for the 1st user will be allowed to connect to Dropbear (if enabled)
-
-```yaml
-# Define non-root user account(s) to create (home drives will be its own dataset)
-# Each user will be required to change password upon first login
-regular_user_accounts: 
-  - user_id: "rich"
-    password: "change!me"
-    full_name: "Richard Durso"
-    groups: "adm,cdrom,dip,lpadmin,lxd,plugdev,sambashare,sudo"
-    shell: "/bin/bash"
-```
-
 ### Additional Settings to Review
 
 * Review [Computer Configuration Settings](docs/computer-config-settings.md)
@@ -247,8 +230,8 @@ There should be no reason to alter the configuration file `vars/main.yml` which 
 
 ### Prepare the Install Environment
 
-1. Boot the Ubuntu Live CD:
-    * Select option <button name="button">Try Ubuntu</button>.
+1. Boot the Debian Live CD:
+    * Select option <button name="button">Live</button>.
     * Connect your system to the internet as appropriate (e.g. join your Wi-Fi network).
     * Open a terminal within the Live CD environment - press <kbd>Ctrl</kbd> <kbd>Alt</kbd>-<kbd>T</kbd>.
 
@@ -261,7 +244,7 @@ The helper script will perform many steps for you such as update packages, creat
 ##### Option 1 - Proper Way to Run Helper Script
 
 ```bash
-wget https://raw.githubusercontent.com/reefland/ansible-zfs_on_root/master/files/do_ssh.sh
+wget https://raw.githubusercontent.com/karigeo/ansible-zfs_on_root/master/files/do_ssh.sh
 
 chmod +x do_ssh.sh
 
@@ -269,16 +252,6 @@ chmod +x do_ssh.sh
 ```
 
 * When prompted for the Ansible password, enter and confirm it.  This will be a temporary password only needed just to push the SSH Key to the target machine.  The Ansible password will be disabled and only SSH authentication will be allowed.
-
-##### Option 2 - Lazy Way to Run Helper Script
-
-```bash
-wget -O - https://bit.ly/do_ssh | bash
-
-sudo passwd ansible
-```
-
-* The `-O` after `wget` is a capital letter `O` (not a zero).
 
 The Live CD Install Environment is now ready.  Nothing else you need to do here.  The rest is done from the Ansible Control node.
 
@@ -289,7 +262,7 @@ The Live CD Install Environment is now ready.  Nothing else you need to do here.
 ### Push your Ansible Public Key to the Install Environment
 
 From the Ansible Control Node push your ansible public key to the Install Environment.
-You will be prompted for the ansible password create within Ubuntu Live CD Install Environment:
+You will be prompted for the ansible password create within Debian Live CD Install Environment:
 
 ```bash
 ssh-copy-id -o "UserKnownHostsFile=/dev/null" -o "StrictHostKeyChecking=no" -i ~/.ssh/ansible.pub ansible@<remote_host_name>
@@ -334,7 +307,7 @@ The `zfs_on_root.yml` is a simple yaml file used to call the role, which can loo
 
 ```yaml
 ---
-- name: ZFS on Root Ubuntu Installation
+- name: ZFS on Root Debian Installation
   hosts: zfs_on_root_install
   become: true
   gather_facts: true
@@ -442,7 +415,7 @@ Here is a brief [overview with additional information](docs/root-pools-multi-mir
 
 ## Emergency chroot Recovery
 
-If your system is unable to boot, then boot from the Ubuntu Live CD to create a `chroot` environment where you can decrypt and mount your ZFS pools, mount boot partitions and have an interactive shell to inspect, troubleshoot, apply updates, etc.  You should be comfortable with [Emergency chroot Recovery](./docs/chroot-recovery.md) process.
+If your system is unable to boot, then boot from the Debian Live CD to create a `chroot` environment where you can decrypt and mount your ZFS pools, mount boot partitions and have an interactive shell to inspect, troubleshoot, apply updates, etc.  You should be comfortable with [Emergency chroot Recovery](./docs/chroot-recovery.md) process.
 
 ---
 
