@@ -84,6 +84,33 @@
       loop:
         "{{ disk_by_id | list | product([boot_partition, swap_partition, lvm_partition]) | map('join','-part') }}"
 
+    - name: Get partition infos for all disks
+      command: "lsblk -o NAME,PARTTYPE,TYPE,PATH -J {{ item }}"
+      loop: "{{ disk_by_id }}"
+      register: partinfos
+
+    - name: Filter for EFI-Partitions
+      set_fact:
+        efi_partitions: >-
+          {{
+            (efi_partitions | default([])) +
+            (
+              (item.stdout | from_json).blockdevices | map(attribute='children') | select('defined')
+              | map('selectattr', 'parttype', 'equalto', 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b')
+              | map('map', attribute='path') | sum(start=[])
+            )
+          }}
+      loop: "{{ partinfos.results }}"
+      when: item.stdout is defined
+
+    - name: Shred all EFI partitions to ensure no leftovers are present
+      ansible.builtin.command:
+        cmd: "shred --iterations=1 --zero {{ item }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      loop:
+        "{{ efi_partitions }}"
+
     - name: Wipe filesystem information
       ansible.builtin.command:
         cmd: "wipefs --all --force {{ item }}"
