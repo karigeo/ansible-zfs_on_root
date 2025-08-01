@@ -24,27 +24,8 @@
     name: sshd
     state: restarted
 
-- name: "reconf locales"
+- name: Setupcon
   ansible.builtin.command:
-    cmd: "dpkg-reconfigure --frontend noninteractive locales"
+    cmd: "setupcon -k"
   register: cmd_output
   changed_when: cmd_output.rc == 0
-
-- name: "reconf tzdata"
-  ansible.builtin.command:
-    cmd: "dpkg-reconfigure --frontend noninteractive tzdata"
-  register: cmd_output
-  changed_when: cmd_output.rc == 0
-
-- name: "reconf keyboard configuration"
-  ansible.builtin.command:
-    cmd: "dpkg-reconfigure --frontend noninteractive keyboard-configuration"
-  register: cmd_output
-  changed_when: cmd_output.rc == 0
-
-- name: "reconf console setup"
-  ansible.builtin.command:
-    cmd: "dpkg-reconfigure --frontend noninteractive console-setup"
-  register: cmd_output
-  changed_when: cmd_output.rc == 0
-

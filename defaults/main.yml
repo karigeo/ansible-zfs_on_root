@@ -47,13 +47,12 @@ default_locale: "en_US.UTF-8"
 timezone_area: "Europe"
 timezone_city: "Berlin"
 
-# Define Keyboard Configuration to set with dpkg-reconfigure
-keyboard_model: "Generic 105-key PC"
-keyboard_variant: "German"
-keyboard_layout: "German"
-keyboard_altgr: "The default for the keyboard layout"
-keyboard_compose: "No compose key"
-keyboard_killx: true
+# Define Keyboard Configuration to set in /etc/default/keyboard 
+keyboard_model: "pc105"
+keyboard_layout: "us"
+keyboard_variant: ""
+keyboard_options: ""
+keyboard_backspace: "guess"
 
 # Define additional packages to install once the build has completed.
 additional_install_packages:
