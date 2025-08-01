@@ -2,12 +2,11 @@
 # This configuration is designed to install Debian Bookworm.
 
 ####### Nothing Below Here Needs to be Edited ############
-debug: true
 
 # Distro Release name
 distro_release: "bookworm"
 distro_name: "debian"
-distro_version: "12.9"
+distro_version: "12.11"
 
 # Define Partition Mapping
 boot_partition: "1"
@@ -137,12 +136,9 @@ remove_os_prober: true
 # Packages required to be held (not installed or updated) that conflict with
 # rEFInd Packages
 packages_to_mark_hold:
-  - "grub-efi-amd64"
-  - "grub-efi-amd64-signed"
-  - "grub-efi-amd64-bin"
-  - "grub-common"
+  - "grub-*"
+  - "grub2"
   - "grub2-common"
-  - "lilo"
 
 # Directory to check that UEFI firmware is available
 # This is required to be found if UEFI support is enabled

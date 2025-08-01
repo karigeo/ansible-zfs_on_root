@@ -143,17 +143,18 @@
         passphrase: "{{ passphrase_prompt.user_input }}"
         no_log: "{{ no_log_secrets }} | default(false) | bool"
 
-- name: ZFS Passphrase Validation Block
+- name: Passphrase Validation Block
   when:
     - passphrase is defined
+    #- (disk_encryption_type == "native") or (disk_encryption_type == "luks")
     - disk_encryption_type == "native"
   tags:
     - always
   block:
-    # ZFS Native Encryption Passphrase must be 8 chars or longer
-    - name: Fail on ZFS Passphrase length
+    # ZFS Native Encryption Passphrase must be 8 chars or longer, but that's also a good Idea for LUKS encryption...
+    - name: Fail on Passphrase length
       ansible.builtin.fail:
-        msg: "ERROR: ZFS passphrase must be at least 8 characters."
+        msg: "ERROR: Passphrase must be at least 8 characters."
       when:
         - passphrase|length|int <8
 
@@ -162,7 +163,7 @@
       ansible.builtin.set_fact:
         root_pool_encryption: true
 
-    - name: ZFS Passphrase debug message
+    - name: Passphrase debug message
       ansible.builtin.debug:
         msg: "NOTE: Passphrase Supplied -- Root Pool Encryption Enabled"
       when: root_pool_encryption is true

@@ -16,7 +16,17 @@
         autoremove: true
         update_cache: true
 
-    - name: Install some requirements
+    - name: Run command to mark APT packages as hold
+      ansible.builtin.command:
+        cmd: "bash -c '{{ item }}'"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      with_items:
+        - "apt-mark hold {{ packages_to_mark_hold | join(' ') }}"
+      when:
+        - ansible_os_family == "Debian"
+
+    - name: Install some basic requirements
       ansible.builtin.apt:
         name:
           - console-setup

@@ -3,7 +3,9 @@
 # Ansible Specific Settings
 ###############################################################################
 # Don't log secret like ZFS on Root Password when running playbook
-no_log_secrets: false
+no_log_secrets: true
+# Do not output debug stuff
+debug: false
 
 ###############################################################################
 # User Settings
