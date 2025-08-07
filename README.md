@@ -1,8 +1,8 @@
-# ZFS on Root For Debian 12 Bookworm
+# ZFS on Root For Debian 13 Trixie
 
 > This Role is a modifed version of [reefland/ansible-zfs_on_root](https://github.com/reefland/ansible-zfs_on_root)
 
-This Ansible role is used to setup / bootstrap a Debian 12 system with ZFS as root filesystem and ZFSBootMenu as Bootloader. Intentionally this is used to further setup a Proxmox Host on top.
+This Ansible role is used to setup / bootstrap a Debian 13 system with ZFS as root filesystem and ZFSBootMenu as Bootloader. Intentionally this is used to further setup a Proxmox Host on top.
 
 _NOTE: This Ansible role is not structured as rigid as a typical Ansible role should be.  Tips and suggestions on how to improve this are welcomed._
 
@@ -46,14 +46,14 @@ Originally based on the [OpenZFS ZFS on Root](https://openzfs.github.io/openzfs-
 
 ## Environments Tested
 
-* Debian 12.11.0 Live ISO (with LXQt) Boot on Bare Metal or within VirtualBox
+* Debian 13 / Trixie / Testing
 
 ---
 
 ## Requirements
 
 * [Ansible](https://www.ansible.com/) (Built with Ansible Core 2.12 or newer)
-* [Debian 12.11.x "Bookworm" Live CD](https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/) (Desktop - DO NOT use standard images)
+* [Debian 13 "Trixie" Live CD](https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/) (Desktop - DO NOT use standard images)
   * _NOTE: you can configure for command-line only server build even when using the desktop image._
 * Computers that have less than 2 GiB of memory run ZFS slowly. 4 GiB of memory is recommended for normal performance in basic workloads.
 
