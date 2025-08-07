@@ -4,9 +4,9 @@
 ####### Nothing Below Here Needs to be Edited ############
 
 # Distro Release name
-distro_release: "bookworm"
+distro_release: "trixie"
 distro_name: "debian"
-distro_version: "12.11"
+distro_version: "13.0"
 
 # Define Partition Mapping
 boot_partition: "1"

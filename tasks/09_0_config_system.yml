@@ -102,8 +102,8 @@
 
     - name: Setup apt sources for Debian
       ansible.builtin.template:
-        src: sources.list.j2
-        dest: "{{ live_cd_mountpoint }}/etc/apt/sources.list.d/{{ distro_release }}.list"
+        src: debian.sources.j2
+        dest: "{{ live_cd_mountpoint }}/etc/apt/sources.list.d/debian.sources"
         owner: root
         group: root
         mode: '0644'

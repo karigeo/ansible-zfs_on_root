@@ -52,18 +52,21 @@
   
 
 # ###[ Change APT Sources on Live CD Environment ]##############################
-- name: Update apt sources.list
+- name: Update apt sources debian.sources
   tags:
     - install-zfs-packages
   block:
     - name: Remove default apt lists
       ansible.builtin.file:
-        name: /etc/apt/sources.list
+        name: "{{ item }}"
         state: absent
+      loop:
+        - /etc/apt/sources.list
+        - /etc/apt/sources.list.d/debian.sources
     - name: Copy apt sources template in place
       ansible.builtin.template:
-        src: sources.list.j2
-        dest: "/etc/apt/sources.list.d/{{ ansible_distribution_release }}.list"
+        src: debian.sources.j2
+        dest: "/etc/apt/sources.list.d/debian.sources"
         owner: root
         group: root
         mode: "0o644"
