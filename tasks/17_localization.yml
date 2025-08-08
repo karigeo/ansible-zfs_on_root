@@ -15,6 +15,7 @@
       ansible.builtin.apt:
         name:
           - tzdata
+          - util-linux-extra
         state: present
 
     - name: Set timezone
@@ -39,9 +40,7 @@
         group: root
         mode: '0644'
       notify: Setupcon
-      
 
-    
     - name: Force handlers to run
       ansible.builtin.meta: flush_handlers
 ###############################################################################
