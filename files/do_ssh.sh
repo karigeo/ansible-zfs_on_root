@@ -6,8 +6,6 @@
 
 ANSIBLE_USER=ansible
 
-# sudo apt-add-repository universe && sudo apt update
-
 # Create ansible account and a home directory to store SSH keys
 echo
 echo "-----------------------------------------------------------------------------"
@@ -32,7 +30,7 @@ if [[ $? -ne 0 ]]; then
 fi
 
 # install SSH Server and Python to allow ansible to connect
-sudo apt install --yes openssh-server vim python3 python3-apt python3-pexpect mdadm btop htop
+sudo apt install --yes openssh-server vim python3 python3-apt python3-pexpect mdadm btop htop qemu-guest-agent
 if [[ $? -ne 0 ]]; then
   echo
   echo "ERROR: installing required packages failed."
