@@ -36,6 +36,7 @@
           - debconf-utils
           - mdadm
           - dosfstools
+          - systemd-cryptsetup
         state: present
         install_recommends: false
 
