@@ -79,9 +79,14 @@
   tags:
     - install-zfs-packages
   block:
+    - name: Install supporting packages (assumes Live CD Environment)
+      ansible.builtin.apt:
+        name: ['debootstrap', 'gdisk', 'linux-headers-amd64', 'dosfstools', 'mdadm', 'cryptsetup', 'lshw']
+        state: present
+        update_cache: true
     - name: Install ZFS packages (assumes Live CD Environment)
       ansible.builtin.apt:
-        name: ['debootstrap', 'gdisk', 'zfsutils-linux', 'dosfstools', 'mdadm', 'cryptsetup', 'lshw']
+        name: ['zfsutils-linux']
         state: present
         update_cache: true
 

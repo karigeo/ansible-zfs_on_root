@@ -21,7 +21,7 @@
 
     - name: Installing a minimal linux system
       ansible.builtin.command:
-        "debootstrap --include lsb-release,python3,python3-apt,sudo,openssh-server {{ distro_release }} {{ live_cd_mountpoint }}"
+        "debootstrap --include lsb-release,python3,python3-apt,sudo,openssh-server,ca-certificates {{ distro_release }} {{ live_cd_mountpoint }}"
       # register: cmd_output
       # changed_when: cmd_output.rc == 0
       args:

@@ -10,9 +10,11 @@
   block:
     - name: Install Kernel Driver Packages
       ansible.builtin.apt:
-        name:
-          - software-properties-common
-          - dkms
+        name: >-
+          {{
+            (['dkms']) +
+            (['software-properties-common'] if distro_release == 'bookworm' else [])
+          }}
         install_recommends: false
       when:
         - ansible_os_family == "Debian"
