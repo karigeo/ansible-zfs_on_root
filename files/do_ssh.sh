@@ -46,6 +46,9 @@ gsettings set org.gnome.desktop.media-handling automount false
 # Disable hibernating, suspend, etc on Debian Live CD:
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
+#Enable qemu guest agent:
+sudo systemctl start qemu-guest-agent
+
 # # Run btop and kill it directly after start just to initialize btop.conf
 # btop &
 # sleep 2
