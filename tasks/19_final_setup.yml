@@ -65,13 +65,14 @@
         path: "{{ ipv6.conf_file }}"
         line: "{{ item }}"
         state: present
+        create: true
       loop: "{{ ipv6.disable_settings }}"
       loop_control:
         label: "{{ item }}"
 
     - name: Apply Updated IPv6 Setting
       ansible.builtin.command:
-        cmd: "{{ ipv6.apply_cmd }}"
+        cmd: "{{ ipv6.apply_cmd }} {{ ipv6.conf_file }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
