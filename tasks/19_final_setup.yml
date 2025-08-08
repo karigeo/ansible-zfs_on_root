@@ -37,7 +37,8 @@
           - bind9-dnsutils
           - libnss-systemd
           - debian-faq
-          - mime-support
+          - media-types
+          - mailcap
           - groff-base
           - lsof
           - bind9-host
