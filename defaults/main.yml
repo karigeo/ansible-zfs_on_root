@@ -42,6 +42,9 @@ refind_no_scan_dirs: "{{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}"
 
 # Define the locale to be set with dpkg-reconfigure
 default_locale: "en_US.UTF-8"
+# Further locales that should be generated an present
+locales_list:
+  - "de_DE.UTF-8"
 
 # Define the timezone to be set with dpkg-reconfigure
 timezone_area: "Europe"

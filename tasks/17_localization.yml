@@ -8,7 +8,14 @@
     - localization
   block:
 ##### LOCALES #####
-# Removed the configuration and setting of locales via debconf, as it was not working properly. No plan to chang that currently.
+    - name: Ensure the specified locales exist
+      community.general.locale_gen:
+        name: >-
+            {{
+              ([ default_locale ]) +
+              ( locales_list )
+            }}
+        state: present
 
 ##### TIMEZONE #####
     - name: Install required packages to configure timezone
