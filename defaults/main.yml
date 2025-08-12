@@ -71,6 +71,8 @@ additional_install_packages:
   - needrestart
   - unattended-upgrades
   - lz4
+  - libpam-systemd
+  - dbus
 
 ###############################################################################
 # Network Configuration
@@ -231,6 +233,7 @@ apply_sshd_settings:
   PasswordAuthentication: "no"
   PermitRootLogin: "prohibit-password"
   PubkeyAuthentication: "yes"
+  UsePAM: "yes" #<-- This is required for systemd-logind to SIGTERM the user ssh session (also requires packages libpam-systemd and dbus)
 
 ###############################################################################
 # Dropbear Settings
