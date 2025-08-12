@@ -277,6 +277,16 @@
        - { url: 'https://raw.githubusercontent.com/agorgl/zbm-luks-unlock/master/hooks/early-setup.d/luks-unlock.sh',   dest: '/etc/zfsbootmenu/hooks/early-setup.d/', exe: true }
        - { url: 'https://raw.githubusercontent.com/agorgl/zbm-luks-unlock/master/hooks/boot-sel.d/initramfs-inject.sh', dest: '/etc/zfsbootmenu/hooks/boot-sel.d/',    exe: true }
        - { url: 'https://raw.githubusercontent.com/agorgl/zbm-luks-unlock/master/dracut.conf.d/99-crypt.conf',          dest: '/etc/zfsbootmenu/dracut.conf.d/',       exe: false }
+       - { url: 'https://raw.githubusercontent.com/agorgl/zbm-luks-unlock/master/dracut.conf.d/zfsbootmenu-luks-uuids.conf', dest: '/etc/zfsbootmenu/dracut.conf.d/',  exe: false }
+
+    # Write UUIDs of devices to be encrypted:
+    - name: Add UUIDs of root partitions to decrypt to config file
+      ansible.builtin.lineinfile:
+        create: true
+        line: "{{ item }}"
+        path: "/etc/zfsbootmenu/dracut.conf.d/zfsbootmenu-luks-uuids.conf"
+        state: "present"
+      with_items: "{{ root_partition_uuids }}"
 
     # Configure ZFSBootMenu
     - name: Copy ZFSBootMenu Config template to /mnt/etc/zfsbootmenu/config.yaml
