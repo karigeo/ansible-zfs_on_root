@@ -42,25 +42,25 @@ refind_no_scan_dirs: "{{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}"
 
 # Define the locale to be set with dpkg-reconfigure
 default_locale: "en_US.UTF-8"
-# Further locales that should be generated an present
+# Further locales that should be generated and present
 locales_list:
   - "de_DE.UTF-8"
 
 apply_locale_settings:
-  LANG:           "{{ default_locale }}" #Determines the default locale in the absence of other locale related environment variables
-  # LANGUAGE:       "{{ default_locale }}" #List of fallback message translation languages (GNU only)
-  # LC_ADDRESS:     "{{ default_locale }}" #Convention used for formatting of street or postal addresses
-  # LC_ALL:         "{{ default_locale }}" #Overrides all other locale variables (except LANGUAGE)
-  # LC_COLLATE:     "{{ default_locale }}" #Collation order
-  # LC_CTYPE:       "{{ default_locale }}" #Character classification and case conversion
-  # LC_MONETARY:    "{{ default_locale }}" #Monetary formatting
-  # LC_MEASUREMENT: "{{ default_locale }}" #Default measurement system used within the region
-  # LC_MESSAGES:    "{{ default_locale }}" #Format of interactive words and responses
-  # LC_NUMERIC:     "{{ default_locale }}" #Numeric formatting
-  # LC_PAPER:       "{{ default_locale }}" #Default paper size for region
-  # LC_RESPONSE:    "{{ default_locale }}" #Determines how responses (such as Yes and No) appear in the local language
-  # LC_TELEPHONE:   "{{ default_locale }}" #Conventions used for representation of telephone numbers
-  # LC_TIME:        "{{ default_locale }}" #Date and time formats
+  LANG:           "{{ default_locale }}"    # Determines the default locale in the absence of other locale related environment variables
+  # LANGUAGE:       "{{ default_locale }}"  # List of fallback message translation languages (GNU only)
+  # LC_ADDRESS:     "{{ default_locale }}"  # Convention used for formatting of street or postal addresses
+  # LC_ALL:         "{{ default_locale }}"  # Overrides all other locale variables (except LANGUAGE)
+  # LC_COLLATE:     "{{ default_locale }}"  # Collation order
+  # LC_CTYPE:       "{{ default_locale }}"  # Character classification and case conversion
+  # LC_MONETARY:    "{{ default_locale }}"  # Monetary formatting
+  # LC_MEASUREMENT: "{{ default_locale }}"  # Default measurement system used within the region
+  # LC_MESSAGES:    "{{ default_locale }}"  # Format of interactive words and responses
+  # LC_NUMERIC:     "{{ default_locale }}"  # Numeric formatting
+  # LC_PAPER:       "{{ default_locale }}"  # Default paper size for region
+  # LC_RESPONSE:    "{{ default_locale }}"  # Determines how responses (such as Yes and No) appear in the local language
+  # LC_TELEPHONE:   "{{ default_locale }}"  # Conventions used for representation of telephone numbers
+  # LC_TIME:        "{{ default_locale }}"  # Date and time formats
 
 # Define the timezone to be set with dpkg-reconfigure
 timezone_area: "Europe"
