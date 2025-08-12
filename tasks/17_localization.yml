@@ -17,6 +17,15 @@
             }}
         state: present
 
+    - name: Set default locale for specified locale variables
+      ansible.builtin.lineinfile:
+        create: true
+        regexp: "^(#? ?)?{{ item.key }}="
+        line: "{{ item.key }}={{ item.value }}"
+        path: "/etc/default/locale"
+        state: "present"
+      loop: "{{ apply_locale_settings | dict2items }}"
+
 ##### TIMEZONE #####
     - name: Install required packages to configure timezone
       ansible.builtin.apt:
@@ -30,7 +39,7 @@
         name: "{{ timezone_area }}/{{ timezone_city }}"
       when: localization_timezone is not none
 
-##### KEYBOARD #####    
+##### KEYBOARD #####
     - name: Install required packages to configure keyboard
       ansible.builtin.apt:
         name:
