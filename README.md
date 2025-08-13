@@ -8,7 +8,7 @@ _NOTE: This Ansible role is not structured as rigid as a typical Ansible role sh
 
 ---
 
-Originally based on the [OpenZFS ZFS on Root](https://openzfs.github.io/openzfs-docs/Getting%20Started/Ubuntu/Ubuntu%2022.04%20Root%20on%20ZFS.html) Guide, but no longer!! Now with many enhancements:
+## Features:
 
 * Uses ZFSbootMenu / rEFInd / Syslinux to manage boot environments
   * rEFInd provides graphical boot loader menu and roll-back to previous kernels on UEFI systems
@@ -22,10 +22,11 @@ Originally based on the [OpenZFS ZFS on Root](https://openzfs.github.io/openzfs-
 * Swap partitions can be enabled
   * Multi-disk swap partitions automatically setup with `mdadm`
   * If encryption is enabled, LUKS is used to encrypt Swap partitions
-* Native ZFS Encryption Support
+* Native ZFS Encryption Support, as well as ZFS in LUKS Container
 * UEFI and Legacy Booting supported (can even switch between them)
 * Customized SSH Configuration Options
 * DropBear support for unlocking ZFS encrypted pool remotely
+* Disable Externally Managed Python Environmen (i.e. Ignore PEP 668)
 * Support for Apt-Cacher-NG proxy for cached packages
 
 ---
@@ -56,6 +57,7 @@ Originally based on the [OpenZFS ZFS on Root](https://openzfs.github.io/openzfs-
 * [Debian 13 "Trixie" Live CD](https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/) (Desktop - DO NOT use standard images)
   * _NOTE: you can configure for command-line only server build even when using the desktop image._
 * Computers that have less than 2 GiB of memory run ZFS slowly. 4 GiB of memory is recommended for normal performance in basic workloads.
+* Besides that, I had issues running this playbook on a VPS with only 4GiB of memory
 
 ## Caution
 
