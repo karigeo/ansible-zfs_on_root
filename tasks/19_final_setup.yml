@@ -21,34 +21,7 @@
         autoclean: true
         autoremove: true
         install_recommends: true
-        name:
-          - task-ssh-server
-          - task-german
-          - pciutils
-          - bash-completion
-          - netcat-traditional
-          - doc-debian
-          - wget
-          - wamerican
-          - python3-reportbug
-          - systemd-timesyncd
-          - reportbug
-          - liblockfile-bin
-          - bind9-dnsutils
-          - libnss-systemd
-          - debian-faq
-          - media-types
-          - mailcap
-          - groff-base
-          - lsof
-          - bind9-host
-          - man-db
-          - krb5-locales
-          - traceroute
-          - inetutils-telnet
-          - apt-listchanges
-          - gpg
-          - gpg-agent
+        name: "{{ packages_standard }}"
 
 ###############################################################################
 # [ Disable IPv6 Networking ]##################################################
@@ -135,6 +108,7 @@
         install_recommends: false
       when:
         - ansible_os_family == "Debian"
+        - additional_install_packages | default('') | length > 0
 
     # Set apt/dpkg to automagically snap the system datasets on install/remove
     - name: Copy apt 30pre-snap to /etc/apt/apt.conf.d/30pre-snap

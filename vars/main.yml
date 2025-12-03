@@ -6,7 +6,7 @@
 # Distro Release name
 distro_release: "trixie"
 distro_name: "debian"
-distro_version: "13.0"
+distro_version: "13.2"
 
 # Define Partition Mapping
 boot_partition: "1"
@@ -139,6 +139,56 @@ packages_to_mark_hold:
   - "grub-*"
   - "grub2"
   - "grub2-common"
+
+# Package list for "standard" Installation
+packages_standard:
+  - task-ssh-server
+  - task-german
+  - pciutils
+  - bash-completion
+  - netcat-traditional
+  - doc-debian
+  - wget
+  - wamerican
+  - python3-reportbug
+  - systemd-timesyncd
+  - reportbug
+  - liblockfile-bin
+  - bind9-dnsutils
+  - libnss-systemd
+  - debian-faq
+  - media-types
+  - mailcap
+  - groff-base
+  - lsof
+  - bind9-host
+  - man-db
+  - krb5-locales
+  - traceroute
+  - inetutils-telnet
+  - apt-listchanges
+  - gpg
+  - gpg-agent
+  - man
+  - udisks2
+  - net-tools
+  - ethtool
+  - htop
+  - btop
+  - pollinate
+  - fwupd
+  - needrestart
+  - unattended-upgrades
+  - lz4
+  - zstd
+  - xz-utils
+  - gzip
+  - unzip
+  - libpam-systemd
+  - dbus
+  - apparmor
+  - apparmor-profiles-extra
+  - apparmor-utils
 
 # Directory to check that UEFI firmware is available
 # This is required to be found if UEFI support is enabled
