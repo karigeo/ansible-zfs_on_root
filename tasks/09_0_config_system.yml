@@ -6,11 +6,6 @@
   tags:
     - config_system
   block:
-    # - name: Mount run directory as tmpfs # noqa command-instead-of-module
-    #   ansible.builtin.command:
-    #     "mount -t tmpfs tmpfs {{ live_cd_mountpoint }}/run"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
 
     - name: Mount run directory as tmpfs
       ansible.posix.mount:
@@ -22,8 +17,6 @@
     - name: Installing a minimal linux system
       ansible.builtin.command:
         "debootstrap --include lsb-release,python3,python3-apt,sudo,openssh-server,ca-certificates {{ distro_release }} {{ live_cd_mountpoint }}"
-      # register: cmd_output
-      # changed_when: cmd_output.rc == 0
       args:
         creates: "{{ live_cd_mountpoint }}/etc/passwd"
 
@@ -111,7 +104,6 @@
 ###############################################################################
 # [ Setup chroot Environment ]#################################################
 # Bind Virtual Filesystem from Live CD to New environment
-# NOTE: Not using ansible mount module as we don't want these added to fstab
 - name: Setup chroot Environment Block
   when:
     - ansible_nodename != "localhost"

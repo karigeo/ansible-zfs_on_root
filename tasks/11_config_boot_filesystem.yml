@@ -127,20 +127,12 @@
         boot: true
         dump: 0
         fstype: vfat
-        opts: nofail,x-systemd.device-timeout=1,x-systemd.after=zfs-mount.service
+        opts: nofail,x-systemd.after=zfs-mount.service
         passno: 1
         path: /boot/efi
         src: "/dev/disk/by-uuid/{{ boot_dev_uuid.stdout }}"
         # src: "{{ (disk_by_id | length | int > 1) | ternary(boot_dev_name, boot_dev_path_single.stdout) }}"
         state: mounted
-
-    # - name: Add EFI Filesystems to /etc/fstab
-    #   ansible.builtin.shell:
-    #     cmd: >
-    #       echo /dev/disk/by-uuid/$(blkid -s UUID -o value "{{ boot_dev_name }}")
-    #       /boot/efi vfat nofail,x-systemd.device-timeout=1,x-systemd.after=zfs-mount.service 0 1 >>"/etc/fstab"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
 
     - name: Debug get contents of chroot /etc/fstab
       ansible.builtin.command:
@@ -155,16 +147,5 @@
         var: cmd_output['stdout']
       when:
         debug | default(false)
-
-    # Mount /boot/efi directory in chroot environment
-    # - name: Mount /boot/efi directory
-    #   ansible.posix.mount:
-    #     path: "{{ efi_boot_mountpoint }}"
-    #     state: "remounted"
-    # - name: Run command to mount /boot/efi directory
-    #   ansible.builtin.command:
-    #     cmd: "mount {{ efi_boot_mountpoint }}"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
 
 ###############################################################################
