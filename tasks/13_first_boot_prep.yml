@@ -108,6 +108,35 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
+    ### Check if client is kvm/qemu virtual machine and apply guest tools and bochs video driver ###
+    - name: Block to prepare system as qemu guest
+      when:
+        ansible_facts['ansible_virtualization_role'] == "guest" and ansible_facts['ansible_virtualization_type'] == "kvm"
+      block:
+        - name: Install qemu-guest-agent
+          ansible.builtin.apt:
+            name: qemu-guest-agent
+            state: present
+            install_recommends: false
+        - name: Enable qemu-guest-agent
+          ansible.builtin.systemd_service:
+            name: qemu-guest-agent
+            enabled: true
+        - name: Add bochs-drm driver module in initramfs
+          ansible.builtin.lineinfile:
+            path: /etc/initramfs-tools/modules
+            create: true
+            line: "bochs"
+            owner: root
+            group: root
+            mode: '644'
+            state: present
+        - name: Re-create initramfs
+          ansible.builtin.command:
+            cmd: "update-initramfs -c -k all"
+          register: cmd_output
+          changed_when: cmd_output.rc == 0
+
     - name: Pause for a second to settle
       ansible.builtin.pause:
         seconds: 1
