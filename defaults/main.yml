@@ -65,6 +65,7 @@ apply_locale_settings:
 # Define the timezone to be set with dpkg-reconfigure
 timezone_area: "Europe"
 timezone_city: "Berlin"
+localization_timezone: "{{ timezone_area }}/{{ timezone_city }}"
 
 # Define Keyboard Configuration to set in /etc/default/keyboard 
 keyboard_model: "pc105"
