@@ -77,7 +77,7 @@
       ansible.builtin.lineinfile:
         path: "/etc/cmdline.d/dracut-network.conf"
         regexp: '(^.*ip=.*$)'
-        line: 'ip={{ apply_dropbear_settings.remoteaccess_ip_config }} rd.neednet=1'
+        line: 'ip={{ apply_dropbear_settings.remoteaccess_ip_config }}'
         create: true
         mode: "0644"
         state: present
@@ -92,7 +92,7 @@
       ansible.builtin.lineinfile:
         path: "/etc/cmdline.d/dracut-network.conf"
         regexp: '(^.*ip=.*$)'
-        line: 'ip={{ apply_dropbear_settings.remoteaccess_ip }}:::{{ apply_dropbear_settings.remoteaccess_netmask }}:::none rd.neednet=1 rd.break'
+        line: 'ip={{ apply_dropbear_settings.remoteaccess_ip }}:::{{ apply_dropbear_settings.remoteaccess_netmask }}:::none rd.break'
         create: true
         mode: "0644"
         state: present
@@ -191,6 +191,21 @@
         owner: "root"
         group: "root"
         mode: "0644"
+
+    # [ Add authorized keys ]#################################################
+    - name: Remove dropbear authorized_keys file to recreate it
+      ansible.builtin.file:
+        path: "/etc/dropbear/authorized_keys"
+        state: absent
+
+    - name: Add authorized_keys to dropbear
+      ansible.builtin.lineinfile:
+        path: "/etc/dropbear/authorized_keys"
+        line: "{{ item }}"
+        create: true
+        mode: "0644"
+        state: present
+      loop: "{{ apply_dropbear_settings.public_key_for_dropbear }}"
 
     - name: Run generate-zbm
       ansible.builtin.shell: |
