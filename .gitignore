@@ -65,3 +65,5 @@ secrets/*.yml
 playbook.yml
 inventory.yml
 ansible.cfg
+.ansible/
+.vscode/
