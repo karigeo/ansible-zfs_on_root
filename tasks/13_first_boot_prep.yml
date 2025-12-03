@@ -108,10 +108,23 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
+
+    ### Ensure, ansible_facts['ansible_virtualization_role'] is available
+    - name: Gather virtualization facts
+      setup:
+        gather_subset: virtual
+      tags: always
+
+    - name: Debug Show Facts
+      ansible.builtin.debug:
+        msg: "{{ ansible_facts }}"
+      when:
+        - debug|default(false)
+
     ### Check if client is kvm/qemu virtual machine and apply guest tools and bochs video driver ###
     - name: Block to prepare system as qemu guest
       when:
-        ansible_facts['ansible_virtualization_role'] == "guest" and ansible_facts['ansible_virtualization_type'] == "kvm"
+        ansible_facts['virtualization_role'] == "guest" and ansible_facts['virtualization_type'] == "kvm"
       block:
         - name: Install qemu-guest-agent
           ansible.builtin.apt:
