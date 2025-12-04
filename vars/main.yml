@@ -37,6 +37,7 @@ raidz_multi_disk_lvm_flags: "-n{{ lvm_partition }}:0:{{ raidz_lvm_partition_size
 
 # Enable root pool encryption (default false) - This will be set to true when a passphrase
 # is specified as an extra variable.
+# NOTE: This will be only set to true, if native ZFS encrpytion will be used!!
 root_pool_encryption: false
 
 # Set the boot and root pool type based on number of devices given ("", "mirror", "raidz", etc.)

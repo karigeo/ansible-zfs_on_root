@@ -39,12 +39,30 @@
 
 
         Disk Devices Specified: {{ disk_by_id | length }}
+             Disk Devices List: {% for device in disk_devices %}{{ device }}{% if not loop.last %}, {% endif %}{% endfor %}
+
+          Disk Devices ID List: {% for disk in disk_by_id %}{{ disk }}{% if not loop.last %}, {% endif %}{% endfor %}
+
+
             ZFS Root Pool Name: {{ root_pool_name }}  {% if disk_by_id | length | int > 1 %}Type: {{ root_pool_type }}{% if (root_pool_type == "mirror") and (disk_by_id | length | int > 3) %} of {{ (disk_by_id | length | int / 2) | int }} mirrored vdevs{% endif %}{% else %}          Type: Single Device{% endif %}
 
       {% if root_partition_size | regex_search('[0-9]+') == "0" %}
                 Root Pool Size: Maximum Size Possible
       {% else %}
         Partition Size Setting: {{ root_partition_size }}
+      {% endif %}
+
+      {% if create_lvm_partition | default(false) | bool == true %}
+      {% if lvm_partition_size | regex_search('[0-9]+') == "0" %}
+            LVM Partition Size: Maximum Size Possible
+      {% else %}
+            LVM Partition Size: {{ lvm_partition_size }}
+      {% endif %}
+              LVM Volume Group: {{ lvm_vg_name }}
+               LVM Volume Name: {{ lvm_volume_name }}
+               LVM Volume Size: {{ lvm_volume_size }}
+      {% else %}
+               No LVM Partition will be created.
       {% endif %}
 
         Encryption Type to use: {{ disk_encryption_type }}

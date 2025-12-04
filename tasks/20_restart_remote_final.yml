@@ -12,7 +12,7 @@
           # {{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }} will be rebooted.
           ##########################################################
 
-          {% if root_pool_encryption | default(false) | bool %}When prompted for passphrase for '{{
+          {% if (disk_encryption_type | default('')) in ['native', 'luks'] %}When prompted for passphrase for '{{
           root_pool_name }}', use: {{ (no_log_secrets | default(true)) | ternary("**********", passphrase) }}
           {% endif %}
 

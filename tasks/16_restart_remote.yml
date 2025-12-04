@@ -23,7 +23,8 @@
 
           Press ENTER to reboot {{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}
       when:
-        - root_pool_encryption | default(false) | bool
+        - (disk_encryption_type == "native") or (disk_encryption_type == "luks")
+        #- root_pool_encryption | default(false) | bool
 
     - name: Commencing Reboot, will take a few minutes....
       ansible.builtin.reboot:

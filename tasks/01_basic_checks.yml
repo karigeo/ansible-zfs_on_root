@@ -138,7 +138,7 @@
       register:
         passphrase_prompt
 
-    - name: Prompt for ZFS Passphrase
+    - name: Set ZFS Passphrase from user input
       ansible.builtin.set_fact:
         passphrase: "{{ passphrase_prompt.user_input }}"
         no_log: "{{ no_log_secrets }} | default(false) | bool"
@@ -159,6 +159,7 @@
         - passphrase|length|int <8
 
     # Turn on encryption flags if a passphrase was set.
+    # NOTE: This will be only set to true, if native ZFS encrpytion will be used!!
     - name: Enable root pool encryption
       ansible.builtin.set_fact:
         root_pool_encryption: true
