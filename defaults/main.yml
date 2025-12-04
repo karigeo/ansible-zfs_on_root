@@ -108,18 +108,31 @@ ipv6:
 # As this is mainly intended to install Proxmox, we should define a static IP and a VLAN aware bridge
 # address_type can be "manual" "static" or "dhcp"
 ipv4:
-  iface:
-    name: eno1
-    address_type: manual
-    network_address: none
-    gateway: none
-  bridge:
-    name: vmbr0
-    address_type: static
-    network_address: "192.168.100.10/24"
-    gateway: 192.168.100.1
-  dns_nameserver: 192.168.100.1
-  dns_search_domain: my.do.main
+  interfaces:  # List of physical interfaces
+    - name: eno1
+      address_type: manual
+      network_address: none
+      gateway: none
+    - name: eno2
+      address_type: manual
+      network_address: none
+      gateway: none
+  bridges:  # List of bridges, each with their bridge-ports (reference to interface.name)
+    - name: vmbr0
+      address_type: static
+      network_address: "192.168.100.10/24"
+      gateway: 192.168.100.1
+      bridge_ports:
+        - eno1
+      vlan_aware: yes
+      bridge_vids: "2-4094"
+    - name: vmbr1
+      address_type: manual
+      network_address: none
+      gateway: none
+      bridge_ports:
+        - eno2
+      vlan_aware: no
 
 ###############################################################################
 # Swap Partition Settings

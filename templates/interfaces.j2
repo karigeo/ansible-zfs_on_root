@@ -1,30 +1,39 @@
 auto lo
 iface lo inet loopback
 
-{% if ipv4.iface.address_type != 'manual' %}
-auto {{ ipv4.iface.name }}
+{% for iface in ipv4.interfaces %}
+{% if iface.address_type != 'manual' %}
+auto {{ iface.name }}
 {% endif %}
-iface {{ ipv4.iface.name }} inet {{ ipv4.iface.address_type }}
-{% if ipv4.iface.address_type == 'static' %}
-        address {{ ipv4.iface.network_address }}
-        gateway {{ ipv4.iface.gateway }}
+iface {{ iface.name }} inet {{ iface.address_type }}
+{% if iface.address_type == 'static' %}
+    address {{ iface.network_address }}
+    gateway {{ iface.gateway }}
 {% endif %}
+{% endfor %}
 
-{% if ipv4.bridge.name != 'none' %}
-{% if ipv4.bridge.address_type != 'manual' %}
-auto {{ ipv4.bridge.name }}
+{% for bridge in ipv4.bridges %}
+{% if bridge.address_type != 'manual' %}
+auto {{ bridge.name }}
 {% endif %}
-iface {{ ipv4.bridge.name }} inet {{ ipv4.bridge.address_type }}
-{% if ipv4.bridge.address_type == 'static' %}
-        address {{ ipv4.bridge.network_address }}
-        gateway {{ ipv4.bridge.gateway }}
-        bridge-ports {{ ipv4.iface.name }}
-        bridge-stp off
-        bridge-fd 0
-        bridge-vlan-aware yes
-        bridge-vids 2-4094
+iface {{ bridge.name }} inet {{ bridge.address_type }}
+{% if bridge.address_type == 'static' %}
+    address {{ bridge.network_address }}
+    gateway {{ bridge.gateway }}
+{% endif %}
+    bridge-ports {{ bridge.bridge_ports | join(' ') }}
+    bridge-stp off
+    bridge-fd 0
+{% if bridge.vlan_aware | default(false) %}
+    bridge-vlan-aware yes
+{% if bridge.bridge_vids %}
+    bridge-vids {{ bridge.bridge_vids }}
 {% endif %}
 {% endif %}
+{% endfor %}
 
+# DNS-Konfiguration (global)
+dns-nameservers {{ ipv4.dns_nameserver }}
+dns-search {{ ipv4.dns_search_domain }}
 
 source /etc/network/interfaces.d/*

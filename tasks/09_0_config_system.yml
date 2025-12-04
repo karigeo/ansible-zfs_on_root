@@ -52,28 +52,50 @@
       loop_control:
         label: "{{ item }}.j2"
 
-    - name: Get Network adapter name from ansible facts
-      ansible.builtin.set_fact:
-        nic_name:
-          stdout: "{{ ansible_default_ipv4.interface }}"
+    # - name: Get Network adapter name from ansible facts
+    #   ansible.builtin.set_fact:
+    #     nic_name:
+    #       stdout: "{{ ansible_default_ipv4.interface }}"
 
-    - name: Store Network adapter name
-      ansible.builtin.set_fact:
-        ipv4: "{{ ipv4|combine({'iface': {'name': {{ nic_name.stdout }} }}, recursive=True) }}"
-      when:
-        - (ipv4.iface.name is undefined) or (ipv4.iface.name == 'none') or (ipv4.iface.name == 'auto')
+    # - name: Store Network adapter name
+    #   ansible.builtin.set_fact:
+    #     ipv4: "{{ ipv4|combine({'iface': {'name': {{ nic_name.stdout }} }}, recursive=True) }}"
+    #   when:
+    #     - (ipv4.iface.name is undefined) or (ipv4.iface.name == 'none') or (ipv4.iface.name == 'auto')
 
-    - name: Debug Show Network Adapter Name Detected
-      ansible.builtin.debug:
-        msg: "Detected Name: {{ nic_name.stdout }}"
-      when:
-        - debug|default(false)
+    # - name: Debug Show Network Adapter Name Detected
+    #   ansible.builtin.debug:
+    #     msg: "Detected Name: {{ nic_name.stdout }}"
+    #   when:
+    #     - debug|default(false)
     
-    - name: Debug Show Network Adapter Name Stored
-      ansible.builtin.debug:
-        msg: "Stored Name: {{ ipv4.iface.name }}"
+    # - name: Debug Show Network Adapter Name Stored
+    #   ansible.builtin.debug:
+    #     msg: "Stored Name: {{ ipv4.iface.name }}"
+    #   when:
+    #     - debug|default(false)
+
+    - name: Get all physical network adapter names from ansible facts
+      ansible.builtin.set_fact:
+        physical_nics: "{{ ansible_interfaces | select('match', '^(en|eth|eno|ens|p\\d+p\\d+)') | list }}"
+
+    - name: Auto-assign physical interfaces if not defined
+      ansible.builtin.set_fact:
+        ipv4: "{{ ipv4 | combine({'interfaces': physical_nics[:ipv4.interfaces|length|default(0)]}, recursive=true) | 
+                    combine({'interfaces': (ipv4.interfaces|default([]) | zip(physical_nics[:ipv4.interfaces|length|default(0)]) | 
+                    map('combine') | list)}, recursive=true) }}"
       when:
-        - debug|default(false)
+        - ipv4.interfaces is not defined or ipv4.interfaces | length == 0
+
+    - name: Debug Show Physical NICs Detected
+      ansible.builtin.debug:
+        msg: "Detected physical NICs: {{ physical_nics }}"
+      when: debug|default(false)
+
+    - name: Debug Show Assigned Interfaces
+      ansible.builtin.debug:
+        msg: "Assigned interfaces: {{ ipv4.interfaces | map(attribute='name') | list }}"
+      when: debug|default(false)
 
     - name: Copy network config file template
       template:
