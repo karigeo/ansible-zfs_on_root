@@ -82,6 +82,17 @@
 
     # [ Setup Dracut Networking for Dropbear]##################################
 
+    # Get macaddress of device to listen on as fact:
+    - name: Find MAC address of device to listen on ({{ apply_dropbear_settings.remoteaccess_device }})
+      ansible.builtin.set_fact:
+        remoteaccess_macaddress: "{{ ansible_facts[apply_dropbear_settings.remoteaccess_device].macaddress }}"
+
+    - name: Debug MAC address
+      ansible.builtin.debug:
+        msg: "Found MAC address: {{ remoteaccess_macaddress }} for device {{ apply_dropbear_settings.remoteaccess_device }}"
+      when:
+        debug | default(false)
+
     # With rd.neednet=1 it will fail to boot if no network available
     # This can be a problem with laptops and docking stations, if the dock
     # is not connected (no ethernet) it can fail to boot
@@ -89,13 +100,14 @@
       ansible.builtin.lineinfile:
         path: "/etc/cmdline.d/dracut-network.conf"
         regexp: '(^.*ip=.*$)'
-        line: 'ip={{ apply_dropbear_settings.remoteaccess_ip_config }} rd.neednet=1 rd.break'
+        line: 'ifname=bootif:{{ remoteaccess_macaddress }} ip=bootif:{{ apply_dropbear_settings.remoteaccess_ip_config }} rd.break'
         create: true
         mode: "0644"
         state: present
         backup: false
       when:
-        - not apply_dropbear_settings.remoteaccess_ip_config == "static"
+        - apply_dropbear_settings.remoteaccess_ip_config in ['dhcp','on','any','dhcp6','auto6','link6']
+        #- not apply_dropbear_settings.remoteaccess_ip_config == "static"
 
     # With rd.neednet=1 it will fail to boot if no network available
     # This can be a problem with laptops and docking stations, if the dock
@@ -104,7 +116,7 @@
       ansible.builtin.lineinfile:
         path: "/etc/cmdline.d/dracut-network.conf"
         regexp: '(^.*ip=.*$)'
-        line: 'ip={{ apply_dropbear_settings.remoteaccess_ip }}:::{{ apply_dropbear_settings.remoteaccess_netmask }}:::none rd.neednet=1 rd.break'
+        line: 'ifname=bootif:{{ remoteaccess_macaddress }} ip={{ apply_dropbear_settings.remoteaccess_ip }}::{{ remoteaccess_gateway }}:{{ apply_dropbear_settings.remoteaccess_netmask }}:{{ host_name }}:bootif:none rd.break'
         create: true
         mode: "0644"
         state: present

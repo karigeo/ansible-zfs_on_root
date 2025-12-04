@@ -133,6 +133,8 @@ ipv4:
       bridge_ports:
         - eno2
       vlan_aware: no
+  dns_nameserver: 192.168.100.1
+  dns_search_domain: my.do.main
 
 ###############################################################################
 # Swap Partition Settings
@@ -273,6 +275,8 @@ apply_sshd_settings:
 #
 enable_dropbear_support: true
 apply_dropbear_settings:
+  # Specify which device should be brought up for remote access:
+  remoteaccess_device: "{{ ipv4.interfaces[0].name }}"
   # Automatic (dhcp) or static IP assignment for zfsbootmenu remote access
   # "dhcp", "dhcp,dhcp6", "dhcp6", or "static"
   remoteaccess_ip_config: "dhcp"
@@ -282,6 +286,8 @@ apply_dropbear_settings:
   # Remote access subnet mask
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
   remoteaccess_netmask: "255.255.255.0"
+  # Remote access gateway
+  remoteaccess_gateway: "192.168.100.1"
   # Define the full path to public key(s) you want to include in Dropbear
   # Allow dracut / dropbear use main user authorized_keys for access
   # Note that login to dropbear is "root" regardless of which authorized_keys is used
