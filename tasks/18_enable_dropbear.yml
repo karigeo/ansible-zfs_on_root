@@ -6,6 +6,15 @@
     - install_dropbear
   block:
 
+    # - name: Remove Dracut-Network and Dropbear packages if already present
+    #   ansible.builtin.apt:
+    #     name: ['dracut-network', 'dropbear', 'isc-dhcp-client']
+    #     state: absent
+    #     autoremove: true
+    #     purge: true
+    #   when:
+    #     - ansible_os_family == "Debian"
+
     - name: Install Dracut-Network and Dropbear
       ansible.builtin.apt:
         name: ['dracut-network', 'dropbear', 'isc-dhcp-client']
@@ -116,7 +125,7 @@
       ansible.builtin.lineinfile:
         path: "/etc/cmdline.d/dracut-network.conf"
         regexp: '(^.*ip=.*$)'
-        line: 'ifname=bootif:{{ remoteaccess_macaddress }} ip={{ apply_dropbear_settings.remoteaccess_ip }}::{{ remoteaccess_gateway }}:{{ apply_dropbear_settings.remoteaccess_netmask }}:{{ host_name }}:bootif:none rd.break'
+        line: 'ifname=bootif:{{ remoteaccess_macaddress }} ip={{ apply_dropbear_settings.remoteaccess_ip }}::{{ apply_dropbear_settings.remoteaccess_gateway }}:{{ apply_dropbear_settings.remoteaccess_netmask }}:{{ host_name }}:bootif:none rd.break'
         create: true
         mode: "0644"
         state: present
