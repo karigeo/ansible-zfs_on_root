@@ -10,7 +10,9 @@
       # Please review the following defaults for: {{ host_name }}
       ####################################################################
 
-         Default Root Password: {{ default_root_password }}
+           Enable Debug Output: {{ debug | default(false) | bool }}
+
+         Default Root Password: {{ (no_log_secrets | default(true)) | ternary("**********", default_root_password) }}
 
         Create Swap Partitions: {{ enable_swap_partitions }}
       {% if enable_swap_partitions | default(true) | bool%}
