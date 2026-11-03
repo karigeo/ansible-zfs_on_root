@@ -13,7 +13,7 @@ mdadm: super1.x cannot open /dev/disk/by-id/ata-<disk_name>-part1: Device or res
 mdadm: /dev/disk/by-id/ata-<disk_name>-part1 is not suitable for this array.
 ```
 
-From within the Ubuntu Live CD environment, I issued:
+From within the Debian Live CD environment, I issued:
 
 ```shell
 sudo mdadm --stop /dev/md127

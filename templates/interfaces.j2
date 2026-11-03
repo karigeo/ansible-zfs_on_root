@@ -13,7 +13,7 @@ iface {{ iface.name }} inet {{ iface.address_type }}
 
 {% endfor %}
 
-{% for bridge in ipv4.bridges %}
+{% for bridge in ipv4.bridges | default([]) %}
 {% if bridge.address_type != 'manual' %}
 auto {{ bridge.name }}
 {% endif %}

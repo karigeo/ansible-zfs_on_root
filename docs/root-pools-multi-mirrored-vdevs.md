@@ -16,12 +16,12 @@ Using multiple mirror vdevs provides much higher performance than raidz vdevs an
 
 ### Device Pair Order
 
-Internally the script references devices by the `/dev/disk/by-id` device path. However, it by will process devices in the `sda`, `sdb`, `sdc`, `sdd`, etc.. order.  
+Internally the role references devices by the `/dev/disk/by-id` (or `/dev/disk/by-path`) device path. Devices are paired in the order given in `disk_devices`: the 1st with the 2nd, the 3rd with the 4th, etc.
 
 You can experiment with providing an alternate order two different ways. Using Ansible command line parameter `--extra-vars` such as:
 
 ```bash
-ansible-playbook -i inventory ./zfs_on_root.yml --extra-vars='{disk_devices: [sda, sdc, sdb, sdd]}'
+ansible-playbook -i inventory.yml ./playbook.yml --tags bootstrap --extra-vars='{disk_devices: [sda, sdc, sdb, sdd]}'
 
 ```
 
