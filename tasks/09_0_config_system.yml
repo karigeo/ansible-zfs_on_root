@@ -26,6 +26,17 @@
         remote_src: true
         dest: "{{ live_cd_mountpoint }}/etc/hostid"
 
+    - name: Copy keyfile for ZFS native encryption
+      ansible.builtin.copy:
+        src: "{{ zfs_native_keyfile }}"
+        remote_src: true
+        dest: "{{ live_cd_mountpoint }}{{ zfs_native_keyfile }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when:
+        - disk_encryption_type == "native"
+
     - name: Disable ZFS Device Node support
       ansible.builtin.command:
         "zfs set devices=off {{ root_pool_name }}"

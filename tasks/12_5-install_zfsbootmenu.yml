@@ -1,34 +1,29 @@
 ---
 # [ Install ZFS Boot Menu ]##############################################
-# [ Block to handle keyfile for autoencryption with native encryption] ##
-- name: Create keyfiles for ZFS native encrypted partitions to be used during boot
-  when: 
+# [ Block to handle the keyfile for ZFS native encryption ] #############
+# The passphrase is entered once in ZFSBootMenu. ZBM reads the keyfile from
+# the keysource dataset, and the keyfile embedded in the initramfs unlocks
+# the pool again after kexec without a second prompt.
+- name: Configure keyfile for ZFS native encryption to be used during boot
+  when:
     - ansible_nodename != "localhost"
     - disk_encryption_type == "native"
   tags:
     - install_zfsbootmenu
   block:
-    - name: Store encryption password in keyfile
-      ansible.builtin.copy:
-        dest: "/etc/zfs/{{ root_pool_name }}.key"
-        content: |
-          {{ passphrase }}
-        force: true
+    - name: Set keysource for ZBM key caching (dataset that holds the keyfile)
+      ansible.builtin.command:
+        cmd: "zfs set org.zfsbootmenu:keysource={{ root_pool_dataset_path }} {{ root_pool_name }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+
+    - name: Install initramfs hook that embeds the keyfile
+      ansible.builtin.template:
+        src: initramfs_zfs_key_hook.j2
+        dest: /etc/initramfs-tools/hooks/zfs-native-key
         owner: root
         group: root
-        mode: '0600'
-
-    - name: Tell ZFS to to use the generated keyfile
-      ansible.builtin.command:
-        cmd: "zfs change-key -o keylocation=file:///etc/zfs/{{ root_pool_name }}.key -o keyformat=passphrase {{ root_pool_name }}"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-
-    - name: Set keysource for zbm key caching (to not have to enter passwords multiple times during boot)
-      ansible.builtin.command:
-        cmd: "zfs set org.zfsbootmenu:keysource=\"{{ root_pool_name }}/ROOT\" {{ root_pool_name }}"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+        mode: "0755"
 
 # [ Block to handle keyfile for autoencryption with luks encryption] ####
 # Further Info: https://askubuntu.com/questions/996155/how-do-i-automatically-decrypt-an-encrypted-filesystem-on-the-next-reboot

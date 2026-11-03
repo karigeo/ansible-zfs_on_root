@@ -1,0 +1,21 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# Embed the ZFS native encryption keyfile in the initramfs so the root pool
+# is unlocked without a second passphrase prompt after ZFSBootMenu.
+# UMASK=0077 in /etc/initramfs-tools/conf.d/umask.conf keeps the image private.
+PREREQ=""
+
+prereqs() {
+  echo "$PREREQ"
+}
+
+case "$1" in
+  prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+copy_file key "{{ zfs_native_keyfile }}"

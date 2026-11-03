@@ -178,12 +178,6 @@
           prompt_for_zfs_passphrase to true.
       when: passphrase is undefined or passphrase | length < 8
 
-    # Pool level encryption flags are only used for ZFS native encryption
-    - name: Enable root pool encryption
-      ansible.builtin.set_fact:
-        root_pool_encryption: true
-      when: disk_encryption_type == "native"
-
 ###############################################################################
 # [ Generate Required Variables for ZFS ]######################################
 - name: Generate Required Variables Block

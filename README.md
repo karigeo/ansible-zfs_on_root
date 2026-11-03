@@ -97,14 +97,13 @@ This provides a configurable way to define how the ZFS installation will look li
 * The size of swap partitions can be defined to a standard value for single device and mirrored setups or a different value for raidz setup.
 * UEFI Booting is automatically enabled and will be used when detected, it will fall back to Legacy BIOS booting when not detected.
 
-### Optional ZFS Native Encryption
+### Optional Encryption (LUKS or ZFS Native)
 
-[ZFS Native Encryption](docs/zfs-encryption-settings.md) (aes-256-gcm) can be enabled for the root pool. If create swap partition option is enabled, then the swap partition will also be encrypted. From the [OpenZFS overview](https://openzfs.github.io/openzfs-docs/Getting%20Started/Ubuntu/Ubuntu%2020.04%20Root%20on%20ZFS.html#encryption):
+The root pool can be [encrypted](docs/zfs-encryption-settings.md) with LUKS (default) or ZFS native encryption (aes-256-gcm). Swap and the optional LVM partition are encrypted as well.
 
-* ZFS native encryption encrypts the data and _most_ metadata in the root pool. It does not encrypt dataset names, snapshot names or properties.
-* The system cannot boot without the passphrase being entered at the console. [Dropbear](docs/dropbear-settings.md) support can be enabled to allow remote SSH access at boot to enter passphrase remotely.
-
-Additionally you can also opt for LUKS encryption of the root filesystem.
+* LUKS: the ZFS pool sits on LUKS containers, ZFS features such as replication are unaffected.
+* ZFS native encryption: one encryption root for the whole pool, every dataset inherits it.
+* The passphrase is entered once at boot in ZFSBootMenu. [Dropbear](docs/dropbear-settings.md) support can be enabled to enter it remotely via SSH.
 
 ### SSHD Configuration Settings
 

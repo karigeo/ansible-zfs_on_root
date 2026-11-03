@@ -50,11 +50,6 @@ lvm_dev_name: "/dev/md/lvm"
 # Block device holding the LVM PV (or its LUKS container): the LVM partition or the mdadm array
 lvm_device: "{{ (disk_by_id | length | int > 1) | ternary(lvm_dev_name, disk_by_id[0] ~ '-part' ~ lvm_partition) }}"
 
-# Enable root pool encryption (default false) - This will be set to true when a passphrase
-# is specified as an extra variable.
-# NOTE: This will be only set to true, if native ZFS encrpytion will be used!!
-root_pool_encryption: false
-
 # Set the boot and root pool type based on number of devices given ("", "mirror", "raidz", etc.)
 root_pool_type: "{{ set_root_pool_type[(disk_by_id | length)] | default(set_root_pool_type['default']) }}"
 
@@ -70,13 +65,23 @@ root_pool_options:
   - "-O normalization=formD"
   - "-O relatime=on"
   - "-O xattr=sa"
-  - "-O mountpoint=/ -R {{ live_cd_mountpoint }} {{ root_pool_name }}"
+  - "-O mountpoint=/"
+  - "-R {{ live_cd_mountpoint }}"
 
-# Define Root Pool Encryption Options
+# Keyfile holding the passphrase for ZFS native encryption. It is created on the
+# live system before the pool is created, copied into the new system and embedded
+# in its initramfs, so the passphrase is only entered once (in ZFSBootMenu).
+zfs_native_keyfile: "/etc/zfs/{{ root_pool_name }}.key"
+
+# ZFS native encryption is set on the pool's root dataset: every dataset of the
+# pool inherits it and shares one encryption root.
 root_pool_encryption_options:
-  - "-o encryption=aes-256-gcm"
-  - "-o keylocation=prompt"
-  - "-o keyformat=passphrase"
+  - "-O encryption=aes-256-gcm"
+  - "-O keyformat=passphrase"
+  - "-O keylocation=file://{{ zfs_native_keyfile }}"
+
+# All "zpool create" options, including encryption for "native"
+root_pool_create_options: "{{ (root_pool_options + ((disk_encryption_type == 'native') | ternary(root_pool_encryption_options, []))) | join(' ') }}"
 
 # Device-mapper names of the LUKS containers holding the root pool (one per disk)
 luks_root_mapper_names: "{{ disk_by_id | map('basename') | map('regex_replace', '^', 'crypt_') | map('regex_replace', '$', '_root') | list }}"
@@ -87,12 +92,11 @@ root_pool_devices: "{{ (disk_encryption_type == 'luks')
             disk_by_id | product([root_partition_name_suffix]) | map('join') | list) }}"
 
 root_pool_create_params:
-  "{{ root_pool_options | join(' ') }} {{ root_pool_type }} {{ root_pool_devices | join(' ') }}"
+  "{{ root_pool_create_options }} {{ root_pool_name }} {{ root_pool_type }} {{ root_pool_devices | join(' ') }}"
 
 root_pool_container_options:
   - "-o canmount=off"
   - "-o mountpoint=none"
-  - "{{ ' ' + (root_pool_encryption | default(false)) | ternary(root_pool_encryption_options | join(' '), '') }}"
   - "{{ root_pool_name }}/ROOT"
 
 root_pool_dataset_path: "{{ root_pool_name }}/ROOT/{{ root_dataset_name }}"
@@ -121,7 +125,7 @@ datasets_to_create:
   # PVE specific datasets:
   - "{{ root_pool_dataset_path }}/var/lib/vz"
   - "-o canmount=on -o mountpoint=/etc/pve  {{ root_pool_dataset_path }}/etc-pve"
-  - "-o canmount=on -o mountpoint=/{{ root_pool_name }}/data {{ (root_pool_encryption | default(false)) | ternary(root_pool_encryption_options | join(' '), '') }} {{ root_pool_name }}/data"
+  - "-o canmount=on -o mountpoint=/{{ root_pool_name }}/data {{ root_pool_name }}/data"
 
 ###############################################################################
 # [ Variable below are unrelated to ZFS ]######################################

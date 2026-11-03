@@ -1,5 +1,21 @@
 ---
 ###############################################################################
+# ###[ Keyfile for ZFS Native Encryption ]#####################################
+- name: Create keyfile for ZFS native encryption
+  when:
+    - disk_encryption_type == "native"
+    - ansible_nodename != "localhost"
+  tags:
+    - create_pools
+  ansible.builtin.copy:
+    dest: "{{ zfs_native_keyfile }}"
+    content: "{{ passphrase }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: "{{ no_log_secrets | default(true) | bool }}"
+
+###############################################################################
 # ###[ Create Standard ZFS Root Pool ]#########################################
 # Single device, mirror, raidz or raidz2 - all devices form one vdev.
 # Only 4+ devices of type "mirror" are handled by the mirrored vdevs block below.
@@ -36,13 +52,13 @@
   block:
     - name: Debug Create Mirrored vdev ZFS Root Pool
       ansible.builtin.debug:
-        msg: "zpool create -f {{ root_pool_options | join(' ') }} mirror {{ root_pool_devices[0] }} {{ root_pool_devices[1] }}"
+        msg: "zpool create -f {{ root_pool_create_options }} {{ root_pool_name }} mirror {{ root_pool_devices[0] }} {{ root_pool_devices[1] }}"
       when:
         - debug | default(false)
 
     - name: Create Mirrored vdev ZFS Root Pool with the first device pair
       ansible.builtin.command:
-        cmd: "zpool create -f {{ root_pool_options | join(' ') }} mirror {{ root_pool_devices[0] }} {{ root_pool_devices[1] }}"
+        cmd: "zpool create -f {{ root_pool_create_options }} {{ root_pool_name }} mirror {{ root_pool_devices[0] }} {{ root_pool_devices[1] }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
