@@ -190,6 +190,7 @@
       ansible.builtin.file:
         path: /usr/local/src/zfsbootmenu/
         state: directory
+        mode: "0755"
 
     - name: Fetch ZBM source from GIT
       ansible.builtin.git:
@@ -207,7 +208,7 @@
     ######################################################################
     # [ Prepare Pre and Post Hooks for generate-zbm ]#####################
     - name: Create pre and post hooks dirs and syslinux snippets dir
-      ansible.builtin.file:
+      ansible.builtin.file:  # noqa: risky-file-permissions (FAT32 ESP, no unix modes)
         path: "{{ item }}"
         state: directory
       loop:
@@ -242,9 +243,10 @@
       ansible.builtin.file:
         path: "{{ item }}"
         state: directory
+        mode: "0755"
       loop:
-       - '/etc/zfsbootmenu/hooks/early-setup.d/'
-       - '/etc/zfsbootmenu/hooks/boot-sel.d/'
+        - '/etc/zfsbootmenu/hooks/early-setup.d/'
+        - '/etc/zfsbootmenu/hooks/boot-sel.d/'
 
     # Install hooks for LUKS encryption
     - name: Fetch ZBM hook scripts and put them in place
@@ -252,12 +254,12 @@
       ansible.builtin.get_url:
         url: "{{ item.url }}"
         dest: "{{ item.dest }}"
-        mode: "{{'0755' if item.exe else '0644'}}"
+        mode: "{{ '0755' if item.exe else '0644' }}"
       loop:
-       - { url: '{{ zbm_luks_unlock_base_url }}/{{ zbm_luks_unlock_version }}/hooks/early-setup.d/luks-unlock.sh',   dest: '/etc/zfsbootmenu/hooks/early-setup.d/', exe: true }
-       - { url: '{{ zbm_luks_unlock_base_url }}/{{ zbm_luks_unlock_version }}/hooks/boot-sel.d/initramfs-inject.sh', dest: '/etc/zfsbootmenu/hooks/boot-sel.d/',    exe: true }
-       - { url: '{{ zbm_luks_unlock_base_url }}/{{ zbm_luks_unlock_version }}/dracut.conf.d/99-crypt.conf',          dest: '/etc/zfsbootmenu/dracut.conf.d/',       exe: false }
-       - { url: '{{ zbm_luks_unlock_base_url }}/{{ zbm_luks_unlock_version }}/dracut.conf.d/zfsbootmenu-luks-uuids.conf', dest: '/etc/zfsbootmenu/dracut.conf.d/',  exe: false }
+        - { url: '{{ zbm_luks_unlock_base_url }}/{{ zbm_luks_unlock_version }}/hooks/early-setup.d/luks-unlock.sh',   dest: '/etc/zfsbootmenu/hooks/early-setup.d/', exe: true }
+        - { url: '{{ zbm_luks_unlock_base_url }}/{{ zbm_luks_unlock_version }}/hooks/boot-sel.d/initramfs-inject.sh', dest: '/etc/zfsbootmenu/hooks/boot-sel.d/',    exe: true }
+        - { url: '{{ zbm_luks_unlock_base_url }}/{{ zbm_luks_unlock_version }}/dracut.conf.d/99-crypt.conf',          dest: '/etc/zfsbootmenu/dracut.conf.d/',       exe: false }
+        - { url: '{{ zbm_luks_unlock_base_url }}/{{ zbm_luks_unlock_version }}/dracut.conf.d/zfsbootmenu-luks-uuids.conf', dest: '/etc/zfsbootmenu/dracut.conf.d/',  exe: false }
 
     # Write UUIDs of devices to be encrypted:
     - name: Add UUIDs of root partitions to decrypt to config file
@@ -266,6 +268,7 @@
         create: true
         line: "{{ item }}"
         path: "/etc/zfsbootmenu/dracut.conf.d/zfsbootmenu-luks-uuids.conf"
+        mode: "0644"
         state: "present"
       with_items: "{{ root_partition_uuids }}"
 

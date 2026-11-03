@@ -77,7 +77,7 @@ ipv4:
       gateway: 192.168.100.1
       bridge_ports:
         - eno1
-      vlan_aware: yes
+      vlan_aware: true
       bridge_vids: "2-4094"
   dns_nameserver: 192.168.100.1
   dns_search_domain: my.do.main   # "none" to omit the search line

@@ -37,4 +37,3 @@
       loop_control:
         loop_var: mount_path
         label: "{{ mount_path.path }}"
-

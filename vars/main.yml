@@ -194,6 +194,10 @@ zfs_boot_menu_version: "v3.1.0"
 zbm_luks_unlock_base_url: "https://raw.githubusercontent.com/agorgl/zbm-luks-unlock"
 zbm_luks_unlock_version: "6e5a6cf8e7430417d84431393fe6536bdc54658f"
 
+# dracut-crypt-ssh module (dropbear in the ZFSBootMenu image), pinned to a commit
+dracut_crypt_ssh_repo_url: "https://github.com/dracut-crypt-ssh/dracut-crypt-ssh.git"
+dracut_crypt_ssh_version: "58af66bcd2169d6ed6a3728de7cb1b41979f60a1"
+
 # Path for rEFInd
 refind_path: "{{ efi_boot_path }}/refind"
 

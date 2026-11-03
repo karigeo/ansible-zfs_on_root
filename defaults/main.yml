@@ -107,7 +107,7 @@ ipv4:
       gateway: 192.168.100.1
       bridge_ports:
         - eno1
-      vlan_aware: yes
+      vlan_aware: true
       bridge_vids: "2-4094"
     - name: vmbr1
       address_type: manual
@@ -115,7 +115,7 @@ ipv4:
       gateway: none
       bridge_ports:
         - eno2
-      vlan_aware: no
+      vlan_aware: false
   dns_nameserver: 192.168.100.1
   dns_search_domain: my.do.main
 

@@ -35,8 +35,9 @@
     - name: Fetch dracut-crypt-ssh source from GIT
       ansible.builtin.git:
         clone: true
-        repo: https://github.com/dracut-crypt-ssh/dracut-crypt-ssh.git
+        repo: "{{ dracut_crypt_ssh_repo_url }}"
         dest: /tmp/dracut-crypt-ssh/
+        version: "{{ dracut_crypt_ssh_version }}"
         force: true
 
     - name: Create dracut module 60crypt-ssh directory

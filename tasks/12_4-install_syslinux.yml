@@ -7,7 +7,7 @@
     - install_syslinux
   block:
     - name: Create Syslinux Directory
-      ansible.builtin.file:
+      ansible.builtin.file:  # noqa: risky-file-permissions (FAT32 ESP, no unix modes)
         state: directory
         path: "{{ syslinux_path }}"
         owner: root
@@ -26,7 +26,7 @@
         - ansible_facts['os_family'] == "Debian"
 
     - name: Copy Syslinux Files in place
-      ansible.builtin.copy:
+      ansible.builtin.copy:  # noqa: risky-file-permissions (FAT32 ESP, no unix modes)
         dest: "{{ syslinux_path }}"
         remote_src: true
         src: "/usr/lib/syslinux/modules/bios/"

@@ -23,6 +23,7 @@
         regexp: "^(#? ?)?{{ item.key }}="
         line: "{{ item.key }}={{ item.value }}"
         path: "/etc/default/locale"
+        mode: "0644"
         state: "present"
       loop: "{{ apply_locale_settings | dict2items }}"
 
@@ -35,7 +36,7 @@
         state: present
 
     - name: Set timezone
-      ansible.builtin.timezone:
+      community.general.timezone:
         name: "{{ localization_timezone }}"
       when: localization_timezone | default('', true) | length > 0
 

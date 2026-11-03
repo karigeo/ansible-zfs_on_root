@@ -39,6 +39,7 @@
         line: "{{ item }}"
         state: present
         create: true
+        mode: "0644"
       loop: "{{ ipv6.disable_settings }}"
       loop_control:
         label: "{{ item }}"

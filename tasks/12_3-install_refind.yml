@@ -25,7 +25,7 @@
         - uefi_mode
 
     - name: Create Directories for zfs-boot-menu and refind
-      ansible.builtin.file:
+      ansible.builtin.file:  # noqa: risky-file-permissions (FAT32 ESP, no unix modes)
         state: directory
         path: "{{ item }}"
         owner: root
@@ -91,7 +91,7 @@
         replace: 'timeout {{ refind_boot_menu_timeout }}'
 
     - name: Create directory for rEFInd theme
-      ansible.builtin.file:
+      ansible.builtin.file:  # noqa: risky-file-permissions (FAT32 ESP, no unix modes)
         state: directory
         path: "{{ refind_path }}/themes/{{ refind_theme_name }}/"
         owner: root

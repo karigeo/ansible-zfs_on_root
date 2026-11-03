@@ -162,7 +162,7 @@ all:
                 network_address: "192.168.0.13/24"
                 gateway: 192.168.0.1
                 bridge_ports: ["ens18"]
-                vlan_aware: yes
+                vlan_aware: true
                 bridge_vids: "2-4094"
             dns_nameserver: 192.168.0.1
             dns_search_domain: localdomain
