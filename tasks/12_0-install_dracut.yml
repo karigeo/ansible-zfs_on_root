@@ -2,7 +2,7 @@
 # [ Install Dracut to Load ZFS ]###############################################
 - name: Install Dracut to Load ZFS Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - install_dracut
   block:
@@ -15,7 +15,7 @@
         - "apt-mark hold {{ packages_to_mark_hold | join(' ') }}"
         - "apt-get install --yes dracut-core zfs-dracut bsdmainutils bsdextrautils gcc"
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     - name: Copy dracut template to /mnt/etc/dracut.conf.d/100-zol.conf
       ansible.builtin.template:

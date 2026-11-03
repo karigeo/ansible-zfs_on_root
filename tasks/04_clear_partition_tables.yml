@@ -3,7 +3,7 @@
 
 - name: Wipe Partitions of Selected Devices Block
   when:
-    ansible_nodename != "localhost"
+    ansible_facts['nodename'] != "localhost"
   tags:
     - clear_partition_tables_from_devices
   block:

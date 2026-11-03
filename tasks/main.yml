@@ -13,14 +13,14 @@
 # [ Load up the secret files ]#####################################################################
 - name: Include Secret Files
   ansible.builtin.include_vars: "{{ item }}"
-  tags: ["always"]
+  tags: ["bootstrap"]
   loop:
     - secrets/main.yml
   no_log: "{{ no_log_secrets | default(true) }}"
 
 - name: Include Task Files to Configure and Setup Live CD Enviroment and Base System
   ansible.builtin.include_tasks: "{{ task_names }}"
-  tags: ["always"]
+  tags: ["bootstrap"]
   loop:
     - 01_test_virtualbox.yml
     - 01_basic_checks.yml
@@ -42,7 +42,7 @@
   vars:
     ansible_port: 8922
   ansible.builtin.include_tasks: "{{ task_names }}"
-  tags: ["always"]
+  tags: ["bootstrap"]
   loop:
     - 09_1_config_system.yml
     - 10_install_zfs.yml
@@ -59,7 +59,7 @@
 
 - name: Include Task Files to Reboot, Reconnect and Finalize new System Config
   ansible.builtin.include_tasks: "{{ task_names }}"
-  tags: ["always"]
+  tags: ["bootstrap"]
   loop:
     - 15_unmount_chroot.yml
     - 16_restart_remote.yml

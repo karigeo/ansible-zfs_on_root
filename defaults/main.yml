@@ -74,22 +74,13 @@ keyboard_variant: ""
 keyboard_options: ""
 keyboard_backspace: "guess"
 
-# Define additional packages to install once the build has completed.
+# Additional packages to install once the build has completed
+# (on top of packages_standard in vars/main.yml)
 additional_install_packages:
-  - man
   - udisks2
-  - pciutils
   - net-tools
-  - ethtool
-  - htop
-  - btop
-  - pollinate
   - fwupd
-  - needrestart
-  - unattended-upgrades
-  - lz4
-  - libpam-systemd
-  - dbus
+  - pollinate
 
 ###############################################################################
 # Network Configuration

@@ -3,7 +3,7 @@
 
 - name: Create Disk Partitions Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     #- (disk_encryption_type == "native") or (disk_encryption_type == "none") #this seems to be a remainder and possibly can be deleted
   tags:
     - create_partitions

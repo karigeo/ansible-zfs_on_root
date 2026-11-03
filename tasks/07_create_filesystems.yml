@@ -2,7 +2,7 @@
 # [ Create Filesystem Containers ]#############################################
 - name: Create Filesystem Containers Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_filesystems
   block:

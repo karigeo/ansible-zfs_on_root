@@ -2,7 +2,7 @@
 # [ System Tweaks Block ]######################################################
 - name: System Tweaks Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - system_tweaks
   block:

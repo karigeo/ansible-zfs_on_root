@@ -3,7 +3,7 @@
 
 - name: Restart timesyncd under Virtualbox Block
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - virtual_box|default(false)|bool
   tags:
     - install-zfs-packages
@@ -74,8 +74,8 @@
 # ##[ Install Packages Need to get Started ]####################################
 - name: Install Packages Need to get Started
   when:
-    - ansible_os_family == "Debian"
-    - ansible_distribution == "Debian"
+    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Debian"
   tags:
     - install-zfs-packages
   block:
@@ -92,8 +92,8 @@
 
 - name: Generate ZFS hostid
   when:
-    - ansible_os_family == "Debian"
-    - ansible_distribution == "Debian"
+    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Debian"
   tags:
     - install-zfs-packages
   block:

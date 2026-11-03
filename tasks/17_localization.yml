@@ -3,7 +3,7 @@
 # [ Run Localization Tasks ]##################################################
 - name: Run Localization Tasks
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - localization
   block:

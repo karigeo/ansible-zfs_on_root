@@ -4,7 +4,7 @@
   ansible.builtin.fail:
     msg: "ERROR: This playbook can not be used on localhost."
   when:
-    ansible_nodename == "localhost"
+    ansible_facts['nodename'] == "localhost"
   tags:
     - always
 
@@ -184,11 +184,55 @@
   tags:
     - always
   block:
-    - name: Generate disk by-id for devices
+    # Resolve a persistent /dev/disk/by-path link for each device. This is used
+    # as a fallback for disks that expose no /dev/disk/by-id link. Many virtio-blk
+    # devices (common on VPS/QEMU hosts) have no serial or WWN, so udev creates no
+    # /dev/disk/by-id symlink for them at all. by-path links use the same "-partN"
+    # partition suffix convention as by-id, so they are drop-in compatible with the
+    # rest of the role. The whole-disk link (no "-part" suffix) is selected, and
+    # sorted deterministically so the generic "pci-*" alias is preferred over the
+    # "virtio-pci-*" alias when both are present.
+    - name: Resolve persistent /dev/disk/by-path link for each device (by-id fallback)
+      ansible.builtin.shell:
+        cmd: >-
+          for link in /dev/disk/by-path/*; do
+            [ -e "$link" ] || continue;
+            case "$link" in *-part*) continue ;; esac;
+            if [ "$(readlink -f "$link")" = "/dev/{{ item }}" ]; then
+              echo "$link";
+            fi;
+          done | LC_ALL=C sort | head -n1
+      args:
+        executable: /bin/bash
+      register: disk_by_path_result
+      changed_when: false
+      loop: "{{ disk_devices }}"
+
+    - name: Reset persistent device path list
       ansible.builtin.set_fact:
-        disk_by_id: "{{ disk_devices |
-          map('extract', hostvars[inventory_hostname]['ansible_devices'], ['links', 'ids', 0]) | list |
-          map('regex_replace', '^(.*)', '/dev/disk/by-id/\\g<1>') | list }}"
+        disk_by_id: []
+
+    # Prefer the stable /dev/disk/by-id path (first id) when the device exposes one;
+    # otherwise fall back to the /dev/disk/by-path link resolved above.
+    - name: Generate persistent device path list (prefer by-id, fall back to by-path)
+      ansible.builtin.set_fact:
+        disk_by_id: "{{ disk_by_id + [dev_path] }}"
+      loop: "{{ disk_devices }}"
+      loop_control:
+        index_var: idx
+      vars:
+        dev_ids: "{{ ansible_facts['devices'][item]['links']['ids'] }}"
+        dev_by_path: "{{ disk_by_path_result.results[idx].stdout }}"
+        dev_path: "{{ (dev_ids | length | int > 0)
+          | ternary('/dev/disk/by-id/' + (dev_ids[0] | default('')), dev_by_path) }}"
+
+    - name: Fail if no persistent device path could be determined
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: Could not determine a persistent /dev/disk/by-id or
+          /dev/disk/by-path path for one or more specified devices. Resolved
+          list: {{ disk_by_id }}
+      when: disk_by_id | select('equalto', '') | list | length > 0
 
     - name: Display disk by-id for disk_devices
       ansible.builtin.debug:

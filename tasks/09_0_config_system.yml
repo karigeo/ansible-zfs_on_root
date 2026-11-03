@@ -2,7 +2,7 @@
 # [ Bootstrap new System ]#################################################
 - name: Bootstrap New System Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - config_system
   block:
@@ -46,7 +46,7 @@
 # [ Start Configuring System ]#################################################
 - name: Configure System Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - config_system
   block:
@@ -125,7 +125,7 @@
 # Bind Virtual Filesystem from Live CD to New environment
 - name: Setup chroot Environment Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - config_system
   block:

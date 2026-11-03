@@ -2,7 +2,7 @@
 # [ Install rEFInd Boot Manager ]##############################################
 - name: Install rEFInd Boot Manager Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - install_refind
   block:
@@ -13,7 +13,7 @@
           - git
         state: present
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     - name: Make sure efivars are mounted
       ansible.posix.mount:
@@ -42,7 +42,7 @@
       with_items:
         - "refind-install --yes"
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     - name: Copy rEFInd template to /mnt/boot/efi/EFI/zfsbootmenu/refind_linux.conf
       ansible.builtin.template:

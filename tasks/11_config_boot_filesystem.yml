@@ -2,7 +2,7 @@
 # [ Setup Boot Partition as mdadm mirror for multi-disk setups ]###############
 - name: Create Boot Partition Mirror Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - disk_by_id | length | int > 1
   tags:
     - config_boot_fs
@@ -56,7 +56,7 @@
 # [ Create Boot Partition for single disk setups ]#############################
 - name: Create Boot Filesystem Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - disk_by_id | length | int == 1
   tags:
     - config_boot_fs
@@ -70,7 +70,7 @@
 # [ Create Boot EFI Directory ]################################################
 - name: Create Boot Filesystem Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - config_boot_fs
   block:
@@ -92,7 +92,7 @@
 # [ Build up fstab file ]######################################################
 - name: Build fstab File Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - config_boot_fs
   block:

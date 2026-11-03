@@ -83,8 +83,9 @@ root_pool_encryption_options:
 # All "zpool create" options, including encryption for "native"
 root_pool_create_options: "{{ (root_pool_options + ((disk_encryption_type == 'native') | ternary(root_pool_encryption_options, []))) | join(' ') }}"
 
-# Device-mapper names of the LUKS containers holding the root pool (one per disk)
-luks_root_mapper_names: "{{ disk_by_id | map('basename') | map('regex_replace', '^', 'crypt_') | map('regex_replace', '$', '_root') | list }}"
+# Device-mapper names of the LUKS containers holding the root pool (one per disk).
+# ':' (found in /dev/disk/by-path names) is not safe in device-mapper names.
+luks_root_mapper_names: "{{ disk_by_id | map('basename') | map('regex_replace', ':', '_') | map('regex_replace', '^', 'crypt_') | map('regex_replace', '$', '_root') | list }}"
 
 # Block devices the root pool is built from: LUKS mappers or the raw root partitions
 root_pool_devices: "{{ (disk_encryption_type == 'luks')
@@ -172,55 +173,44 @@ packages_to_mark_hold:
   - "grub2"
   - "grub2-common"
 
-# Package list for "standard" Installation
+# Package list for a minimal "standard" server installation
 packages_standard:
+  # --- SSH ---
   - task-ssh-server
-  - task-german
-  - pciutils
-  - bash-completion
-  - netcat-traditional
-  - doc-debian
-  - wget
-  - wamerican
-  - python3-reportbug
-  - systemd-timesyncd
-  - reportbug
-  - liblockfile-bin
-  - bind9-dnsutils
+  # --- core system integration ---
+  - dbus
+  - libpam-systemd
   - libnss-systemd
-  - debian-faq
-  - media-types
-  - mailcap
-  - groff-base
-  - lsof
-  - bind9-host
-  - man-db
-  - krb5-locales
-  - traceroute
-  - inetutils-telnet
-  - apt-listchanges
+  - systemd-timesyncd
+  - ca-certificates
   - gpg
   - gpg-agent
-  - man
-  - udisks2
-  - net-tools
+  - apparmor
+  # --- admin / diagnostic utilities ---
+  - bash-completion
+  - pciutils
   - ethtool
+  - lsof
   - htop
   - btop
-  - pollinate
-  - fwupd
   - needrestart
-  - unattended-upgrades
-  - lz4
-  - zstd
-  - xz-utils
+  - groff-base
+  - man-db
+  # --- networking utilities ---
+  - wget
+  - curl
+  - netcat-traditional
+  - traceroute
+  - bind9-dnsutils
+  # --- compression / archive ---
   - gzip
+  - xz-utils
+  - zstd
+  - lz4
   - unzip
-  - libpam-systemd
-  - dbus
-  - apparmor
-  - apparmor-profiles-extra
-  - apparmor-utils
+  # --- misc ---
+  - media-types
+  - unattended-upgrades
 
 # Directory to check that UEFI firmware is available
 # This is required to be found if UEFI support is enabled

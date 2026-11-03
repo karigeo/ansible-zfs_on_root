@@ -2,7 +2,7 @@
 # [ Create Datasets for Filesystem ]###########################################
 - name: Create Datasets for Filesystem Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_datasets
   block:

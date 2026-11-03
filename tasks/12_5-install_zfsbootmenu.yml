@@ -6,7 +6,7 @@
 # the pool again after kexec without a second prompt.
 - name: Configure keyfile for ZFS native encryption to be used during boot
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - disk_encryption_type == "native"
   tags:
     - install_zfsbootmenu
@@ -29,7 +29,7 @@
 # Further Info: https://askubuntu.com/questions/996155/how-do-i-automatically-decrypt-an-encrypted-filesystem-on-the-next-reboot
 - name: Create keyfiles for luks encrypted partitions to be used during boot
   when: 
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - disk_encryption_type == "luks"
   tags:
     - install_zfsbootmenu
@@ -94,7 +94,7 @@
         msg:
           - "{{ disk_by_id }}"
           - "{{ item }}"
-          - "crypt_{{ item | regex_search('([^\/]+$)') }}_root"
+          - "{{ luks_root_mapper_names[ansible_loop.index0] }}"
       loop: "{{ disk_by_id }}"
       loop_control:
         extended: true
@@ -103,7 +103,7 @@
 
     - name: Add root filesystem crypt container to crypttab
       community.general.crypttab:
-        name: "crypt_{{ item | regex_search('([^\/]+$)') }}_root"
+        name: "{{ luks_root_mapper_names[ansible_loop.index0] }}"
         backing_device: "UUID={{ root_partition_uuids[ansible_loop.index0] }}"
         password: "/etc/cryptsetup-keys.d/{{ root_pool_name }}.key"
         opts: luks,discard,initramfs
@@ -140,7 +140,7 @@
 # [ Block for tasks that have to be done for both enryption methods] ####
 - name: Run tasks that have to be done for both enryption methods
   when: 
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - disk_encryption_type != "none"
   tags:
     - install_zfsbootmenu
@@ -158,7 +158,7 @@
 # [Proceed with actual ZBM Installation] ################################
 - name: Install ZFS Boot Menu Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - install_zfsbootmenu
   block:

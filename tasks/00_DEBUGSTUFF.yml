@@ -1,7 +1,7 @@
 ---
 - name: Create LUKS Containers
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - run_extra_debug | default(false) | bool
   tags:
     - notag

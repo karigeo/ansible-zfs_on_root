@@ -4,7 +4,7 @@
 - name: Create keyfile for ZFS native encryption
   when:
     - disk_encryption_type == "native"
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_pools
   ansible.builtin.copy:
@@ -22,7 +22,7 @@
 - name: Create Standard ZFS Root Pool Block
   when:
     - not (root_pool_type == "mirror" and disk_by_id | length | int >= 4)
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_pools
   block:
@@ -46,7 +46,7 @@
   when:
     - root_pool_type == "mirror"
     - disk_by_id | length | int >= 4
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_pools
   block:

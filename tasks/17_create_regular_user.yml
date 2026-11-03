@@ -2,7 +2,7 @@
 # [ Create Regular / Non-root Users ]##########################################
 - name: Create Regular User Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_regular_users
   block:

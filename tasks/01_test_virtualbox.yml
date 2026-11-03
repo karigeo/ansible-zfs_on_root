@@ -13,8 +13,8 @@
 # Determine if running under Virtual Box
 - name: Determine if running under Virtual Box
   when:
-    - ansible_os_family == "Debian" or
-      ansible_os_family == "Archlinux"
+    - ansible_facts['os_family'] == "Debian" or
+      ansible_facts['os_family'] == "Archlinux"
     - stat_lspci.stat.exists is defined and stat_lspci.stat.exists
   tags:
     - always
@@ -36,9 +36,9 @@
 # If check not defined for OS Family above then fail.
 - name: Display failure message
   ansible.builtin.fail:
-    msg: "ERROR - VirtualBox Check not defined for {{ ansible_os_family }}"
+    msg: "ERROR - VirtualBox Check not defined for {{ ansible_facts['os_family'] }}"
   when:
-    - ansible_os_family != "Debian" and
-      ansible_os_family != "Archlinux"
+    - ansible_facts['os_family'] != "Debian" and
+      ansible_facts['os_family'] != "Archlinux"
   tags:
     - always

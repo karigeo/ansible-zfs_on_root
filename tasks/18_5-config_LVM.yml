@@ -10,7 +10,7 @@
 # [ Create Multi Disk LVM Mirror or RAID ]#####################################
 - name: Create Multi Disk LVM Mirror or RAID Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - create_lvm_partition | default(true) | bool
     - disk_by_id | length | int > 1
   tags:
@@ -53,7 +53,7 @@
 # [ Unencrypted LVM Configuration ]############################################
 - name: Unencrypted LVM Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - create_lvm_partition | default(true) | bool
     - disk_encryption_type == "none"
   tags:
@@ -68,7 +68,7 @@
 # [ Encrypted LVM Configuration ]##############################################
 - name: Encrypted LVM Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - create_lvm_partition | default(true) | bool
     - disk_encryption_type in ["luks", "native"]
   tags:
@@ -143,7 +143,7 @@
 # [ Common Tasks of LVM Configuration ]########################################
 - name: Run common tasks of LVM configuration
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - create_lvm_partition | default(true) | bool
   tags:
     - config_lvm

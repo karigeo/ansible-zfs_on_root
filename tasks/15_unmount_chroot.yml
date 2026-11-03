@@ -2,7 +2,7 @@
 # [ Unmount chroot ]###########################################################
 - name: Unmount chroot Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - unmount_chroot
   block:

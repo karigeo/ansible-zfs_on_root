@@ -10,7 +10,7 @@
 # [ Create Multi Disk Swap mdadm Array ]#######################################
 - name: Create Multi Disk Swap mdadm Array Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - enable_swap_partitions | default(true) | bool
     - disk_by_id | length | int > 1
   tags:
@@ -42,7 +42,7 @@
 # [ Unencrypted Swap ]#########################################################
 - name: Unencrypted Swap Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - enable_swap_partitions | default(true) | bool
     - disk_encryption_type == "none"
   tags:
@@ -81,7 +81,7 @@
 # [ Encrypted Swap ]###########################################################
 - name: Encrypted Swap Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - enable_swap_partitions | default(true) | bool
     - disk_encryption_type in ["luks", "native"]
   tags:

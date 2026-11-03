@@ -67,3 +67,4 @@ inventory.yml
 ansible.cfg
 .ansible/
 .vscode/
+.claude/

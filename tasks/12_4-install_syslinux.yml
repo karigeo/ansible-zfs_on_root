@@ -2,7 +2,7 @@
 # [ Install Syslinux Boot Loader ]##############################################
 - name: Install Syslinux Boot Loader Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - install_syslinux
   block:
@@ -23,7 +23,7 @@
           - unzip
         state: present
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     - name: Copy Syslinux Files in place
       ansible.builtin.copy:
@@ -40,7 +40,7 @@
         # Install extlinux
         - "extlinux --install {{ syslinx_path }}"
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     - name: Run command to install the syslinux GPTMBR data on each disk device
       ansible.builtin.command:

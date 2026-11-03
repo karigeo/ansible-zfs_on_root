@@ -4,7 +4,7 @@
 
 - name: Install ZFS into chroot Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - install_zfs
   block:
@@ -17,7 +17,7 @@
           }}
         install_recommends: false
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     - name: Ensure ZFS update rebuilds all initramfs
       ansible.builtin.copy:
@@ -42,7 +42,7 @@
           - zfs-dkms
         install_recommends: false
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     - name: Purge os-prober
       ansible.builtin.apt:
@@ -51,7 +51,7 @@
         state: absent
         purge: true
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     # The "old" kernel links mess up zfsbootmenu generation, so remove them
     # Don't need them for an initial install anyway

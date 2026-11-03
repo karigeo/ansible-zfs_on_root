@@ -3,7 +3,7 @@
 # [ Upgrade base system ]##################################################
 - name: Upgrade Base System Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - final_setup
   block:
@@ -28,7 +28,7 @@
 - name: Disable IPv6 Networking Block
   when:
     - ipv6.disable | default(false) | bool
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - final_setup
     - disable_ipv6
@@ -96,7 +96,7 @@
 # [ Final Setup ]##############################################################
 - name: Final Setup Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - final_setup
   block:
@@ -107,8 +107,8 @@
         state: present
         install_recommends: false
       when:
-        - ansible_os_family == "Debian"
-        - additional_install_packages | default('') | length > 0
+        - ansible_facts['os_family'] == "Debian"
+        - additional_install_packages | default('', true) | length > 0
 
     # Set apt/dpkg to automagically snap the system datasets on install/remove
     - name: Copy apt 30pre-snap to /etc/apt/apt.conf.d/30pre-snap
