@@ -8,7 +8,7 @@
   block:
     - name: Install rEFInd Boot Manager
       ansible.builtin.apt:
-        name: 
+        name:
           - refind
           - git
         state: present
@@ -36,11 +36,9 @@
 
     - name: Run command to install rEFInd Boot Manager
       ansible.builtin.command:
-        cmd: "{{ item }}"
+        cmd: "refind-install --yes"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      with_items:
-        - "refind-install --yes"
       when:
         - ansible_facts['os_family'] == "Debian"
 
@@ -68,7 +66,7 @@
         - disk_by_id | length | int > 1
         - ("rEFInd " ~ (item | basename)) not in efi_boot_entries.stdout
 
-    - name: Copy rEFInd template to /mnt/boot/efi/EFI/zfsbootmenu/refind_linux.conf
+    - name: Copy rEFInd template to the ZFSBootMenu directory (refind_linux.conf)
       ansible.builtin.template:
         src: refind_linux.conf.j2
         dest: "{{ zfs_boot_menu_path }}/refind_linux.conf"
@@ -82,13 +80,11 @@
       when:
         - not uefi_mode
       ansible.builtin.command:
-        cmd: "{{ item }}"
+        cmd: "mvrefind {{ efi_boot_path }}/BOOT {{ refind_path }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      with_items:
-        - "mvrefind {{ efi_boot_path }}/BOOT {{ refind_path }}"
 
-    - name: Reduce rEFIND boot menu timeout from 20 seconds to new value
+    - name: Set rEFInd boot menu timeout
       ansible.builtin.replace:
         path: "{{ refind_path }}/refind.conf"
         regexp: '^timeout .*'
@@ -149,7 +145,7 @@
       when:
         - refind_resolution is defined
         - refind_resolution|length > 0
-    
+
     - name: Configure directories to exclude from scan for rEFInd
       ansible.builtin.lineinfile:
         path: "{{ refind_path }}/refind.conf"

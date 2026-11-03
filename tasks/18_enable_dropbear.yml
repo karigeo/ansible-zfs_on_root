@@ -1,20 +1,13 @@
 ---
+# [ Dropbear in ZFSBootMenu ]##################################################
+# Adds the dracut crypt-ssh module (dropbear) and network configuration to the
+# ZFSBootMenu image, so the passphrase can be entered remotely via SSH (port 222).
 - name: Configure System for Dropbear and Busybox to allow Remote Unlock Block
   when:
     - enable_dropbear_support | default(false) | bool
   tags:
     - install_dropbear
   block:
-
-    # - name: Remove Dracut-Network and Dropbear packages if already present
-    #   ansible.builtin.apt:
-    #     name: ['dracut-network', 'dropbear', 'isc-dhcp-client']
-    #     state: absent
-    #     autoremove: true
-    #     purge: true
-    #   when:
-    #     - ansible_facts['os_family'] == "Debian"
-
     # dropbear-bin only provides the binaries for the dracut crypt-ssh module in
     # the ZFSBootMenu image: no dropbear service on the host and no dropbear in
     # the host initramfs (unlike the dropbear / dropbear-initramfs packages)
@@ -66,7 +59,7 @@
       loop:
         - "/usr/lib/dracut/modules.d/60crypt-ssh/Makefile"
         - "/usr/lib/dracut/modules.d/60crypt-ssh/helper/"
-    
+
     # Comment out all lines containing: inst "$moddir"/helper/
     - name: Modify dracut module module-setup.sh
       ansible.builtin.replace:
@@ -74,9 +67,7 @@
         regexp: '(^.*inst "\$moddir"\/helper\/.*$)'
         replace: '#\1'
 
-    # [ Setup Dracut Networking for Dropbear]##################################
-
-    # Get macaddress of device to listen on as fact:
+    # [ Setup Dracut Networking for Dropbear ]#################################
     - name: Find MAC address of device to listen on ({{ apply_dropbear_settings.remoteaccess_device }})
       ansible.builtin.set_fact:
         remoteaccess_macaddress: "{{ ansible_facts[apply_dropbear_settings.remoteaccess_device].macaddress }}"
@@ -87,9 +78,8 @@
       when:
         debug | default(false)
 
-    # With rd.neednet=1 it will fail to boot if no network available
-    # This can be a problem with laptops and docking stations, if the dock
-    # is not connected (no ethernet) it can fail to boot
+    # rd.neednet=1 is not set on purpose: it makes the boot fail when no network
+    # is available (e.g. laptop without its docking station)
     - name: Create file /etc/cmdline.d/dracut-network.conf for DHCP
       ansible.builtin.lineinfile:
         path: "/etc/cmdline.d/dracut-network.conf"
@@ -101,11 +91,7 @@
         backup: false
       when:
         - apply_dropbear_settings.remoteaccess_ip_config in ['dhcp','on','any','dhcp6','auto6','link6']
-        #- not apply_dropbear_settings.remoteaccess_ip_config == "static"
 
-    # With rd.neednet=1 it will fail to boot if no network available
-    # This can be a problem with laptops and docking stations, if the dock
-    # is not connected (no ethernet) it can fail to boot
     - name: Create file /etc/cmdline.d/dracut-network.conf for Static IP
       ansible.builtin.lineinfile:
         path: "/etc/cmdline.d/dracut-network.conf"
@@ -126,14 +112,14 @@
         state: present
         backup: false
 
-    # [ Add Dropbear welcome messate ]####################################
+    # [ Add Dropbear welcome message ]####################################
     - name: Copy dracut network banner to /etc/zfsbootmenu/dracut.conf.d/banner.txt
       ansible.builtin.template:
         src: dracut_banner.txt.j2
         dest: "/etc/zfsbootmenu/dracut.conf.d/banner.txt"
         owner: root
         group: root
-        mode: '0755'
+        mode: '0644'
 
     - name: Add network banner to dropbear startup parameters
       ansible.builtin.replace:
@@ -152,54 +138,14 @@
               inst /etc/zfsbootmenu/dracut.conf.d/banner.txt /etc/banner.txt
             }
 
-    # [ Setup Host Keys ]######################################################
-    # We will convert the machine's existing host keys for dropbear to not get the "Host Key Verification Failed" error.
-    - name: Create /etc/dropbear/ directory for host keys
+    # [ Host Keys ]############################################################
+    # The dracut crypt-ssh module converts the OpenSSH host keys configured in
+    # dracut_dropbear.conf, so dropbear presents the same host keys as sshd.
+    - name: Create /etc/dropbear/ directory for authorized_keys
       ansible.builtin.file:
         path: "/etc/dropbear/"
         mode: "0755"
         state: directory
-
-    ### it seems that module-setup.sh of 60crypt-ssh can convert the openssh host system keys just fine, 
-    ### so commented out and specified host keys in dracut_dropbear.conf template
-    # - name: Copy SSH Server Keys into temporary location
-    #   ansible.builtin.copy: 
-    #     dest: "/tmp/ssh/"
-    #     src: "/etc/ssh/ssh_host_{{ item }}_key"
-    #     remote_src: true
-    #     owner: root
-    #     group: root
-    #     mode: '0600'
-    #   loop:
-    #   # The dropbear.conf will look for these 3 keys
-    #     - "ecdsa"
-    #     - "ed25519"
-    #     - "rsa"
-
-    # - name: Convert temporary ssh keys to PEM format
-    #   ansible.builtin.command:
-    #     cmd: 'ssh-keygen -p -N "" -m PEM -f /tmp/ssh/ssh_host_{{ item }}_key'
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
-    #   loop:
-    #     - "ecdsa"
-    #     - "ed25519"
-    #     - "rsa"
-
-    # - name: Convert SSH keys to dropbear format
-    #   ansible.builtin.command:
-    #     cmd: 'dropbearconvert openssh dropbear /tmp/ssh/ssh_host_{{ item }}_key /etc/dropbear/dropbear_{{ item }}_host_key'
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
-    #   loop:
-    #     - "ecdsa"
-    #     - "ed25519"
-    #     - "rsa"
-      
-    # - name: Remove temporary key files
-    #   ansible.builtin.file:
-    #     path: "/tmp/ssh/"
-    #     state: absent
 
     # [ Add dracut dropbear config file ]######################################
     - name: Copy dracut dropbear config file to /etc/zfsbootmenu/dracut.conf.d/dropbear.conf
@@ -225,14 +171,11 @@
         state: present
       loop: "{{ apply_dropbear_settings.public_key_for_dropbear }}"
 
-    - name: Run commands to update initramfs and generate ZBM
+    - name: Regenerate ZBM image with dropbear
       ansible.builtin.command:
-        cmd: "{{ item }}"
+        cmd: "generate-zbm --debug"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      loop:
-        - "update-initramfs -c -k all"
-        - "generate-zbm --debug"
 
     - name: Debug show output of generate-zbm
       ansible.builtin.debug:

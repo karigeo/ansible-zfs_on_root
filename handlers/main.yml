@@ -1,24 +1,6 @@
 ---
-- name: "Create skeleton home directory structure"
-  ansible.builtin.copy:
-    src: "/etc/skel/."
-    dest: "/home/{{ item.item.user_id }}"
-    owner: "{{ item.item.user_id }}"
-    group: "{{ item.item.user_id }}"
-    mode: "0700"
-    remote_src: true
-  when: item.changed
-  with_items: "{{ home_dirs.results }}"
-  loop_control:
-    label: "/home/{{ item.item.user_id }}"
-
-- name: "Force change password"
-  ansible.builtin.command: "chage -d 0 {{ item.item.user_id }}"
-  when: item.changed
-  with_items: "{{ accounts.results }}"
-  loop_control:
-    label: "{{ item.item.user_id }}"
-
+# NOTE: Handlers run with play/host vars. A handler notified from a task in
+# the chroot phase (ansible_port 8922) would run against the live system.
 - name: "Restart sshd"
   ansible.builtin.systemd:
     name: ssh

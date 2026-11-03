@@ -2,18 +2,17 @@
 ###############################################################################
 # Ansible Specific Settings
 ###############################################################################
-# Don't log secret like ZFS on Root Password when running playbook
+# Don't log or display secrets (passphrase, passwords) when running the playbook
 no_log_secrets: true
-# Do not output debug stuff
+# Output additional debug messages
 debug: false
 
 ###############################################################################
 # User Settings
 ###############################################################################
 
-# This is a temporary root password used during the build process.
-# Root password will be disabled during the final stages.
-# The non-root user account will have sudo privileges
+# Temporary root password used during the build process.
+# It is expired in final_setup (must be changed on first login).
 default_root_password: "root"
 
 ###############################################################################
@@ -22,7 +21,7 @@ default_root_password: "root"
 # Default domain hosts will use if not defined in inventory file
 domain_name: "localdomain"
 
-# rEFInd Boot Menu Timeout by default is 20 seconds.
+# rEFInd boot menu timeout in seconds (rEFInd default is 20)
 refind_boot_menu_timeout: "5"
 
 # Specify rEFInd display resolution to use (width height)
@@ -30,44 +29,35 @@ refind_boot_menu_timeout: "5"
 # "max" tries to set the maximum possible resolution
 refind_resolution: "0 0"
 
-# Enables background image for refind
-# ATTENTION: file "theme.conf" has to be placed in the themes folder to configure the skin!
+# Enable a rEFInd theme, cloned from refind_theme_repo into themes/<refind_theme_name>.
+# The repository must contain a "theme.conf" (included from refind.conf) and the
+# icon icons/os_proxmox.png used for the ZFSBootMenu entry.
 refind_theming: true
 refind_theme_name: refind-ambience
 refind_theme_repo: https://github.com/karigeo/refind-ambience
 
-# Specify dirs, which should not be scanned by rEFInd: 
-# (comma separated list)
+# Directories (on the ESP) rEFInd should not scan, comma separated list.
+# The ZFSBootMenu directory is excluded because a custom menu entry is added.
 refind_no_scan_dirs: "{{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}"
 
-# Define the locale to be set with dpkg-reconfigure
+# Default locale (generated and set in /etc/default/locale)
 default_locale: "en_US.UTF-8"
 # Further locales that should be generated and present
 locales_list:
   - "de_DE.UTF-8"
 
+# Variables written to /etc/default/locale. Further keys can be added, e.g.
+# LANGUAGE, LC_ADDRESS, LC_COLLATE, LC_CTYPE, LC_MEASUREMENT, LC_MESSAGES,
+# LC_MONETARY, LC_NUMERIC, LC_PAPER, LC_TELEPHONE, LC_TIME (or LC_ALL).
 apply_locale_settings:
-  LANG:           "{{ default_locale }}"    # Determines the default locale in the absence of other locale related environment variables
-  # LANGUAGE:       "{{ default_locale }}"  # List of fallback message translation languages (GNU only)
-  # LC_ADDRESS:     "{{ default_locale }}"  # Convention used for formatting of street or postal addresses
-  # LC_ALL:         "{{ default_locale }}"  # Overrides all other locale variables (except LANGUAGE)
-  # LC_COLLATE:     "{{ default_locale }}"  # Collation order
-  # LC_CTYPE:       "{{ default_locale }}"  # Character classification and case conversion
-  # LC_MONETARY:    "{{ default_locale }}"  # Monetary formatting
-  # LC_MEASUREMENT: "{{ default_locale }}"  # Default measurement system used within the region
-  # LC_MESSAGES:    "{{ default_locale }}"  # Format of interactive words and responses
-  # LC_NUMERIC:     "{{ default_locale }}"  # Numeric formatting
-  # LC_PAPER:       "{{ default_locale }}"  # Default paper size for region
-  # LC_RESPONSE:    "{{ default_locale }}"  # Determines how responses (such as Yes and No) appear in the local language
-  # LC_TELEPHONE:   "{{ default_locale }}"  # Conventions used for representation of telephone numbers
-  # LC_TIME:        "{{ default_locale }}"  # Date and time formats
+  LANG: "{{ default_locale }}"
 
-# Define the timezone to be set with dpkg-reconfigure
+# Timezone of the new system
 timezone_area: "Europe"
 timezone_city: "Berlin"
 localization_timezone: "{{ timezone_area }}/{{ timezone_city }}"
 
-# Define Keyboard Configuration to set in /etc/default/keyboard 
+# Keyboard configuration written to /etc/default/keyboard
 keyboard_model: "pc105"
 keyboard_layout: "us"
 keyboard_variant: ""
@@ -96,8 +86,10 @@ ipv6:
     - "net.ipv6.conf.lo.disable_ipv6 = 1"
   apply_cmd: "sysctl -p"
 
-# As this is mainly intended to install Proxmox, we should define a static IP and a VLAN aware bridge
-# address_type can be "manual" "static" or "dhcp"
+# Written to /etc/network/interfaces. As this is mainly intended to install
+# Proxmox VE, the example uses a static IP on a VLAN aware bridge.
+# address_type can be "manual", "static" or "dhcp"; network_address uses CIDR notation.
+# DNS settings are written to /etc/resolv.conf (dns_search_domain "none" to omit it).
 ipv4:
   interfaces:  # List of physical interfaces
     - name: eno1
@@ -137,18 +129,18 @@ enable_swap_partitions: true
 single_or_mirror_swap_partition_size_mb: "4096"
 
 # Swap partition size, per device, when three or more devices are used.
-# Estimated size in MB is:  #devices-1 * size_MB
+# They form an mdadm raid10, usable size in MB is: #devices * size_MB / 2
 raidz_swap_partition_size_mb: "1024"
 
 ###############################################################################
 # Disk Encryption Settings
 ###############################################################################
-# Prompt for Encryption Passphrase.  if true, then prompt for
-# passphrase if not provided.
+# Prompt for the encryption passphrase (LUKS or native) if it is not provided
+# via the "passphrase" variable. If false, a missing passphrase is an error.
 prompt_for_zfs_passphrase: true
 
-# Specify wether to use LUKS or ZFS native encryption.
-# If an additional LVM Volume is defined, it's encryption will always be LUKS
+# Specify whether to use LUKS or ZFS native encryption, see docs/zfs-encryption-settings.md
+# The LVM partition (if enabled) is always encrypted with LUKS when encryption is used.
 # "native" for ZFS native encryption
 # "luks" for LUKS encryption
 # "none" for no encryption
@@ -157,8 +149,7 @@ disk_encryption_type: luks
 ###############################################################################
 # Root Pool Settings
 ###############################################################################
-# Define Pool Names - can be set to whatever you like.
-# Short hostname is default, this is like "rpool" in the previous methods.
+# Name of the root pool
 root_pool_name: "rpool"
 
 # Name of the dataset for the root filesystem
@@ -198,9 +189,10 @@ create_lvm_partition: true
 single_or_mirror_lvm_partition_size: "0"
 
 # LVM partition size, per device, when three or more devices are used.
-# Estimated size is:  #devices-1 * size
+# They form an mdadm raid5, usable size is: (#devices - 1) * size
 raidz_lvm_partition_size: "0"
 
+# Volume group and (thin) logical volume created on the LVM partition
 lvm_vg_name: pve
 lvm_volume_name: data
 lvm_volume_is_thin: true
@@ -212,7 +204,7 @@ lvm_volume_size: "99%VG"
 
 # Define the root pool type based on number of devices.
 #  - If you want 3 devices to be a 3 way mirror change it, etc.
-#  - If even number 2,4,6,8, etc of type mirror, then mirrored vdevs will be used.
+#  - 4, 6, 8, ... devices of type mirror form mirrored vdevs (pairs of disks).
 #  - -  This is higher performance with redundancy and much faster resilver times
 #  - -  than using any type of raidz.
 #  - Raidz will be the default if something below is not defined.
@@ -240,7 +232,7 @@ zfs_pool_trim_systemd_oncalendar: "weekly"
 # NOTE: false will create, just not enable by default.
 zfs_pool_scrub_systemd_service_enable: true
 
-# Define ZFS Pool Trim Schedule (see systemd OnCalendar for valid options)
+# Define ZFS Pool Scrub Schedule (see systemd OnCalendar for valid options)
 zfs_pool_scrub_systemd_oncalendar: "monthly"
 
 ###############################################################################
@@ -253,20 +245,19 @@ apply_sshd_settings:
   PasswordAuthentication: "no"
   PermitRootLogin: "prohibit-password"
   PubkeyAuthentication: "yes"
-  UsePAM: "yes" #<-- This is required for systemd-logind to SIGTERM the user ssh session (also requires packages libpam-systemd and dbus)
+  UsePAM: "yes"  # Required for systemd-logind to SIGTERM the user ssh session (also requires packages libpam-systemd and dbus)
 
 ###############################################################################
 # Dropbear Settings
 ###############################################################################
-# Dropbear support allows for small SSH service to be included in initram to
-# allow for remote connection to enter the ZFS Native Encryption Password.
-#
+# Dropbear support adds a small SSH server (port 222) to the ZFSBootMenu image,
+# to enter the encryption passphrase (LUKS or native) remotely. See docs/dropbear-settings.md
 enable_dropbear_support: true
 apply_dropbear_settings:
-  # Specify which device should be brought up for remote access:
+  # Physical network device to bring up for remote access
   remoteaccess_device: "{{ ipv4.interfaces[0].name }}"
-  # Automatic (dhcp) or static IP assignment for zfsbootmenu remote access
-  # "dhcp", "dhcp,dhcp6", "dhcp6", or "static"
+  # IP configuration for ZFSBootMenu remote access (dracut ip= option):
+  # "dhcp", "dhcp6", "on", "any", "auto6", "link6" or "static"
   remoteaccess_ip_config: "dhcp"
   # Remote access static IP address to connect to ZFSBootMenu
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
@@ -275,8 +266,8 @@ apply_dropbear_settings:
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
   remoteaccess_netmask: "255.255.255.0"
   # Remote access gateway
+  # Only used with "static"
   remoteaccess_gateway: "192.168.100.1"
-  # Define the full path to public key(s) you want to include in Dropbear
-  # Allow dracut / dropbear use main user authorized_keys for access
-  # Note that login to dropbear is "root" regardless of which authorized_keys is used
+  # List of public keys (authorized_keys lines) allowed to log in to dropbear.
+  # Note that login to dropbear is "root" regardless of the key used.
   public_key_for_dropbear: ["ssh-ed25519 ABCDEFG user@machine"]

@@ -1,14 +1,16 @@
 ---
-# This configuration is designed to install Debian Bookworm.
-
+###############################################################################
+# Internal settings of the role (Debian 13 "trixie"): partition layout, pool
+# and dataset construction, paths. User settings live in defaults/main.yml.
 ####### Nothing Below Here Needs to be Edited ############
+###############################################################################
 
-# Distro Release name
+# Debian release to install (debootstrap suite and apt sources)
 distro_release: "trixie"
-distro_name: "debian"
-distro_version: "13.2"
 
-# Define Partition Mapping
+###############################################################################
+# [ Partitions ]###############################################################
+# Partition numbers on every disk
 boot_partition: "1"
 swap_partition: "2"
 root_partition: "3"
@@ -17,8 +19,9 @@ lvm_partition: "4"
 # Define EFI System Partition (ESP) Size in MB
 boot_partition_size_mb: "512"
 
+# EFI system partition (EF00) with the "legacy BIOS bootable" attribute (bit 2),
+# so syslinux can boot from it on legacy BIOS systems
 uefi_partition_flags: "-a1 -n{{ boot_partition }}:1M:+{{ boot_partition_size_mb }}M -A{{ boot_partition }}:set:2 -t{{ boot_partition }}:EF00"
-# uefi_partition_flags: "-n{{ boot_partition }}:1M:+{{ boot_partition_size_mb }}M -t{{ boot_partition }}:EF00"
 
 # Swap partition size per device: 1-2 devices use the single/mirror size, 3+ the raidz size
 swap_partition_size_mb: "{{ (disk_by_id | length | int > 2) | ternary(raidz_swap_partition_size_mb, single_or_mirror_swap_partition_size_mb) }}"
@@ -33,14 +36,15 @@ swap_dev_name: "/dev/md/swap"
 # Block device holding swap: the swap partition (single device) or the mdadm array
 swap_device: "{{ (disk_by_id | length | int > 1) | ternary(swap_dev_name, disk_by_id[0] ~ '-part' ~ swap_partition) }}"
 
-# Define Root Pool Partition Flags
+# Root pool partition flags, the partition type is appended in 05_create_partitions.yml
 root_partition_flags: "-n{{ root_partition }}:0:{{ root_partition_size }} -t{{ root_partition }}"
 
-# Define Pool Partition Suffixes
+# Suffix of the root partition in /dev/disk/by-id (or by-path) names
 root_partition_name_suffix: "-part{{ root_partition }}"
 
-# Define LVM Pool Partition Flags based on one device or more
-single_disk_or_mirror_lvm_partition_type: "{{ '8e00' if disk_encryption_type == 'none' else '8309' if disk_encryption_type == 'luks' or disk_encryption_type == 'native' }}"
+# LVM partition flags: Linux LVM (8e00) or Linux LUKS (8309) on 1-2 devices,
+# Linux RAID (FD00) for the mdadm raid5 on 3+ devices
+single_disk_or_mirror_lvm_partition_type: "{{ (disk_encryption_type == 'none') | ternary('8e00', '8309') }}"
 single_disk_or_mirror_lvm_flags: "-n{{ lvm_partition }}:0:{{ single_or_mirror_lvm_partition_size }} -t{{ lvm_partition }}:{{ single_disk_or_mirror_lvm_partition_type }}"
 raidz_multi_disk_lvm_flags: "-n{{ lvm_partition }}:0:{{ raidz_lvm_partition_size }} -t{{ lvm_partition }}:FD00"
 
@@ -50,10 +54,12 @@ lvm_dev_name: "/dev/md/lvm"
 # Block device holding the LVM PV (or its LUKS container): the LVM partition or the mdadm array
 lvm_device: "{{ (disk_by_id | length | int > 1) | ternary(lvm_dev_name, disk_by_id[0] ~ '-part' ~ lvm_partition) }}"
 
-# Set the boot and root pool type based on number of devices given ("", "mirror", "raidz", etc.)
+###############################################################################
+# [ Root Pool and Datasets ]###################################################
+# Root pool type based on the number of devices ("", "mirror", "raidz", etc.)
 root_pool_type: "{{ set_root_pool_type[(disk_by_id | length)] | default(set_root_pool_type['default']) }}"
 
-# Define Root Pool Options
+# "zpool create" options (pool name and vdevs are appended)
 root_pool_options:
   - "-o ashift={{ zfs_rpool_ashift }}"
   - "-o autotrim=on"
@@ -92,14 +98,17 @@ root_pool_devices: "{{ (disk_encryption_type == 'luks')
   | ternary(['/dev/mapper/'] | product(luks_root_mapper_names) | map('join') | list,
             disk_by_id | product([root_partition_name_suffix]) | map('join') | list) }}"
 
+# Complete "zpool create" arguments for a single-vdev pool
 root_pool_create_params:
   "{{ root_pool_create_options }} {{ root_pool_name }} {{ root_pool_type }} {{ root_pool_devices | join(' ') }}"
 
+# Container dataset for boot environments (<pool>/ROOT)
 root_pool_container_options:
   - "-o canmount=off"
   - "-o mountpoint=none"
   - "{{ root_pool_name }}/ROOT"
 
+# Root dataset (boot environment) of the new system
 root_pool_dataset_path: "{{ root_pool_name }}/ROOT/{{ root_dataset_name }}"
 root_dataset_options:
   - "-o mountpoint=/"
@@ -107,7 +116,7 @@ root_dataset_options:
 
 root_pool_home_dataset_path: "{{ root_pool_name }}/ROOT/home"
 
-# Define Additional Datasets to Create
+# Additional datasets ("zfs create" arguments)
 datasets_to_create:
   - "{{ root_pool_dataset_path }}/srv"
   - "-o canmount=off {{ root_pool_dataset_path }}/usr"
@@ -129,12 +138,11 @@ datasets_to_create:
   - "-o canmount=on -o mountpoint=/{{ root_pool_name }}/data {{ root_pool_name }}/data"
 
 ###############################################################################
-# [ Variable below are unrelated to ZFS ]######################################
-
-# Define mount location within LIVE CD
+# [ Paths and Boot Loaders ]###################################################
+# Mount point of the new system on the live CD (also the sshd chroot of phase 2)
 live_cd_mountpoint: "/mnt"
 
-# Define chroot command to use
+# chroot command for tasks that run on the live system (phase 1)
 chroot_cmd: "chroot {{ live_cd_mountpoint }}"
 
 # EFI Boot Mountpoint
@@ -157,17 +165,18 @@ zbm_luks_unlock_version: "6e5a6cf8e7430417d84431393fe6536bdc54658f"
 # Path for rEFInd
 refind_path: "{{ efi_boot_path }}/refind"
 
-# efi pathname for rEFInd within startup.nsh file (reversed slashes expected)
+# rEFInd loader path on the ESP (backslashes) for startup.nsh and UEFI boot entries
 refind_efi_pathname: 'EFI\refind\refind_x64.efi'
 
-# Path for syslinx BIOS bootloader
-syslinx_path: "{{ efi_boot_mountpoint }}/syslinux"
+# Path for syslinux (legacy BIOS boot loader)
+syslinux_path: "{{ efi_boot_mountpoint }}/syslinux"
 
 # OS Prober is only needed on dual-boot configurations.
 remove_os_prober: true
 
-# Packages required to be held (not installed or updated) that conflict with
-# rEFInd Packages
+###############################################################################
+# [ Packages ]#################################################################
+# GRUB packages are held so they never get installed next to rEFInd/ZFSBootMenu
 packages_to_mark_hold:
   - "grub-*"
   - "grub2"
@@ -212,22 +221,20 @@ packages_standard:
   - media-types
   - unattended-upgrades
 
-# Directory to check that UEFI firmware is available
-# This is required to be found if UEFI support is enabled
+###############################################################################
+# [ Misc ]#####################################################################
+# Exists when the live system was booted in UEFI mode (otherwise legacy BIOS)
 efi_firmware_path: "/sys/firmware/efi"
 
-# Location of sudoers include file which contains: ansible ALL=(ALL) NOPASSWD:ALL
+# sudoers include file for the ansible user in the new system
 sudoers_include_file: "/etc/sudoers.d/99_sudo_include_file"
 
-# Name of SSH Installation Helper Script (to remove if found)
-ssh_installation_helper_script: "do_ssh.sh"
-
-# Comma Separated Device Number to include as possible "disk" devices
-# 8=[SATA, SCSI], 179=[MMC], 259=[NVMe]
+# Comma separated major device numbers to offer as "disk" devices when
+# disk_devices is not given: 8=[SATA, SCSI], 179=[MMC], 259=[NVMe]
+# (virtio disks like vda have a dynamic major number, specify them explicitly)
 lsblk_device_types: "8,179,259"
 
-# "lsblk -ndo name,mountpoint --include {{lsblk_device_types}} | grep -v '/' | cat"
-# The RO indicates if device is read-only (value 1), the awk filters to value 0 - not read-only
+# The RO column indicates if a device is read-only (value 1), the awk filters to value 0 - not read-only
 lsblk_device_command: "lsblk -ndo name,mountpoint,ro --include {{ lsblk_device_types }} | awk '/0$/{print $1}'"
 
 # This version shows a little more information during manual install selection

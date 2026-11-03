@@ -6,19 +6,6 @@
   tags:
     - first_boot_prep
   block:
-
-############NOT POSSIBLE, BECAUSE ANSIBLE USER IS BEING USED####################
-    # [ Configure Ansible User correctly ] ###############################
-    # - name: Disable Ansible user's password and move home
-    #   ansible.builtin.user:
-    #     name: ansible
-    #     comment: "Ansible User (use only with SSH)"
-    #     create_home: false
-    #     home: /home/ansible
-    #     move_home: true
-    #     password: '*'
-
-    # [ Start Upgrading install ]##############################################
     - name: Run apt dist-upgrade
       ansible.builtin.apt:
         upgrade: dist
@@ -26,14 +13,6 @@
         autoclean: true
         autoremove: true
         purge: true
-
-    # - name: Run commands to enable acpid if detected
-    #   ansible.builtin.command:
-    #     cmd: "{{ item }}"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
-    #   with_items:
-    #     - '[ -d /proc/acpi ] && apt-get -qq --yes install acpi acpid && systemctl enable acpid && systemctl stop acpid'
 
     - name: Add nicer PS1 USER prompt
       ansible.builtin.lineinfile:
@@ -75,7 +54,7 @@
         command: "passwd"
         responses:
           (?i)password: "{{ default_root_password }}"
-      no_log: "{{ no_log_secrets | default(true) }}"
+      no_log: "{{ no_log_secrets | default(true) | bool }}"
 
     - name: Run command to enable mount on default/root dataset
       ansible.builtin.command:
@@ -83,8 +62,7 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
-
-    ### Check if client is kvm/qemu virtual machine and apply guest tools and bochs video driver ###
+    # KVM/QEMU guest: install the guest agent and load the bochs video driver early
     - name: Block to prepare system as qemu guest
       when:
         ansible_facts.get('virtualization_role', '') == "guest" and ansible_facts.get('virtualization_type', '') == "kvm"
@@ -105,7 +83,7 @@
             line: "bochs"
             owner: root
             group: root
-            mode: '644'
+            mode: '0644'
             state: present
 
     # mdadm arrays (ESP, swap) exist now - record them so they are assembled

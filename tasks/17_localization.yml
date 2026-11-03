@@ -7,7 +7,7 @@
   tags:
     - localization
   block:
-##### LOCALES #####
+    # [ Locales ]
     - name: Ensure the specified locales exist
       community.general.locale_gen:
         name: >-
@@ -26,7 +26,7 @@
         state: "present"
       loop: "{{ apply_locale_settings | dict2items }}"
 
-##### TIMEZONE #####
+    # [ Timezone ]
     - name: Install required packages to configure timezone
       ansible.builtin.apt:
         name:
@@ -36,10 +36,10 @@
 
     - name: Set timezone
       ansible.builtin.timezone:
-        name: "{{ timezone_area }}/{{ timezone_city }}"
-      when: localization_timezone is not none
+        name: "{{ localization_timezone }}"
+      when: localization_timezone | default('', true) | length > 0
 
-##### KEYBOARD #####
+    # [ Keyboard ]
     - name: Install required packages to configure keyboard
       ansible.builtin.apt:
         name:

@@ -16,7 +16,7 @@
         update_cache: true
         install_recommends: true
 
-    - name: Install basic software set (should equate to 'tasksel standard')
+    - name: Install minimal server package set (packages_standard)
       ansible.builtin.apt:
         autoclean: true
         autoremove: true
@@ -48,27 +48,6 @@
         cmd: "{{ ipv6.apply_cmd }} {{ ipv6.conf_file }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-
-# ###############################################################################
-# # [ Enable ZFS Email Notifications ]##########################################
-# - name: Enable ZFS Email Notifications Block
-#   when:
-#     - msmtp.enabled | default(false) | bool
-#   tags:
-#     - final_setup
-#     - install_msmtp
-#   block:
-#     # Enable ZFS Email Notifications
-#     - name: Modify syslinux-update.sh
-#       ansible.builtin.replace:
-#         path: "/etc/zfs/zed.d/zed.rc"
-#         regexp: '{{ find_values.regexp }}'
-#         replace: '{{ find_values.replace }}'
-#       loop:
-#         - { regexp: '^ZED_EMAIL_ADDR.*', replace: 'ZED_EMAIL_ADDR="{{ msmtp.msmtp_alias_default }}"' }
-#         - { regexp: '(^#)?ZED_EMAIL_OPTS.*', replace: 'ZED_EMAIL_OPTS="-s ''@SUBJECT@'' @ADDRESS@ -r {{ secret_msmtp_send_from_email }}"' }
-#       loop_control:
-#         loop_var: find_values
 
 ###############################################################################
 # [ Apply SSHD Settings ]######################################################
@@ -105,7 +84,6 @@
   tags:
     - final_setup
   block:
-
     - name: Install any remaining packages defined
       ansible.builtin.apt:
         pkg: "{{ additional_install_packages }}"
@@ -124,20 +102,12 @@
         group: root
         mode: '0644'
 
-    # - name: Update timezone setting
-    #   ansible.builtin.command:
-    #     cmd: "timedatectl set-timezone {{ timezone_value }}"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
-
     - name: Expire the root password
       ansible.builtin.command:
-        cmd: "passwd --expire {{ item }}"
+        cmd: "passwd --expire root"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      loop:
-        - 'root'
-    
+
     - name: Disable ansible user password
       ansible.builtin.user:
         name: ansible

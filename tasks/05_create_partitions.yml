@@ -4,16 +4,15 @@
 - name: Create Disk Partitions Block
   when:
     - ansible_facts['nodename'] != "localhost"
-    #- (disk_encryption_type == "native") or (disk_encryption_type == "none") #this seems to be a remainder and possibly can be deleted
   tags:
     - create_partitions
-
   block:
-    - name: Decide if Partitions are LUKS encypted, ZFS native encrypted or unencrypted
+    # Root partition type: Linux LUKS (8309) or Solaris root / ZFS (BF00)
+    - name: Decide if Partitions are LUKS encrypted, ZFS native encrypted or unencrypted
       ansible.builtin.set_fact:
-        root_partition_type: "{{ 'BF00' if disk_encryption_type == 'native' or disk_encryption_type == 'none' else '8309' if disk_encryption_type == 'luks' }}"
+        root_partition_type: "{{ (disk_encryption_type == 'luks') | ternary('8309', 'BF00') }}"
 
-    # This is created for UEFI booting
+    # EFI system partition, also flagged "legacy BIOS bootable" for syslinux
     - name: Create UEFI Boot Loader Partitions
       ansible.builtin.command:
         cmd: "sgdisk {{ uefi_partition_flags }} {{ item }}"
@@ -39,7 +38,7 @@
       changed_when: cmd_output.rc == 0
       loop:
         "{{ disk_by_id }}"
-    
+
     # 1 or 2 devices = single or mirror flags, 3 or more use raid flags
     - name: Create LVM Partitions
       ansible.builtin.command:

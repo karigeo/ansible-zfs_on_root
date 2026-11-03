@@ -1,14 +1,22 @@
 ---
-####################################################################################################
-# This script is for installing and configuring ZFS on Root from an Debian Live CD.
+###############################################################################
+# Installs Debian 13 on ZFS root from a Debian Live CD. DESTRUCTIVE: all
+# partitions on "disk_devices" are erased.
 #
-# Usage: --extra-vars='{"disk_devices": [sda, sdb], host_name: "mynewpc", passphrase: "mys3cret"}
+# Usage (the play tags the role with [never, bootstrap]):
+#   ansible-playbook -i inventory.yml playbook.yml -l <host> --tags bootstrap \
+#     --extra-vars='{disk_devices: [sda, sdb], host_name: "mynewpc", passphrase: "mys3cret"}'
 #
-# The "disk_devices" specifies the devices to erase all partitions from and install ZFS filesystem on.
-# The simple "sda" style references will be converted to "disk_by_id" references.
+# Devices like "sda" are converted to /dev/disk/by-id (or /dev/disk/by-path)
+# references. If "disk_devices" or "host_name" is not specified, you will be
+# prompted for it.
 #
-# If the required "disk_devices", or "host_name" is not specified, you will be prompted to enter it.
-######################################################################################################
+# Phases:
+#   1. Live CD environment: checks, partitioning, encryption, pool, debootstrap
+#   2. chroot: tasks connect to the live system's sshd on port 8922, which is
+#      chrooted into live_cd_mountpoint (see 03_install_zfs_packages.yml)
+#   3. Reboot into the new system and finalize it
+###############################################################################
 
 # [ Load up the secret files ]#####################################################################
 - name: Include Secret Files
@@ -18,13 +26,12 @@
     - secrets/main.yml
   no_log: "{{ no_log_secrets | default(true) }}"
 
-- name: Include Task Files to Configure and Setup Live CD Enviroment and Base System
+- name: Include Task Files to Configure and Setup Live CD Environment and Base System
   ansible.builtin.include_tasks: "{{ task_names }}"
   tags: ["bootstrap"]
   loop:
     - 01_test_virtualbox.yml
     - 01_basic_checks.yml
-    ### - 00_DEBUGSTUFF.yml
     - 02_confirm_defaults.yml
     - 03_install_zfs_packages.yml
     - 04_clear_partition_tables.yml

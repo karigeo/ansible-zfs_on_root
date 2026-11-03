@@ -1,6 +1,9 @@
 ---
-# [ Install ZFS Boot Menu ]##############################################
-# [ Block to handle the keyfile for ZFS native encryption ] #############
+# [ Install ZFS Boot Menu ]####################################################
+# Prepares encryption for boot, then builds ZFSBootMenu from source and
+# generates the ZBM kernel/initramfs (components) on the ESP.
+
+# [ Block to handle the keyfile for ZFS native encryption ]####################
 # The passphrase is entered once in ZFSBootMenu. ZBM reads the keyfile from
 # the keysource dataset, and the keyfile embedded in the initramfs unlocks
 # the pool again after kexec without a second prompt.
@@ -25,10 +28,12 @@
         group: root
         mode: "0755"
 
-# [ Block to handle keyfile for autoencryption with luks encryption] ####
-# Further Info: https://askubuntu.com/questions/996155/how-do-i-automatically-decrypt-an-encrypted-filesystem-on-the-next-reboot
+# [ Block to handle keyfile for LUKS encryption ]##############################
+# ZBM (zbm-luks-unlock hooks) asks for the passphrase. The booted system unlocks
+# the containers again from /etc/crypttab with a keyfile embedded in the initramfs.
+# Further Info: https://cryptsetup-team.pages.debian.net/cryptsetup/README.initramfs.html
 - name: Create keyfiles for luks encrypted partitions to be used during boot
-  when: 
+  when:
     - ansible_facts['nodename'] != "localhost"
     - disk_encryption_type == "luks"
   tags:
@@ -36,7 +41,7 @@
   block:
     - name: Install package cryptsetup
       ansible.builtin.apt:
-        name: 
+        name:
           - cryptsetup
           - cryptsetup-initramfs
         state: present
@@ -47,19 +52,12 @@
         state: directory
         mode: '0700'
 
-    - name: Debug Output root_pool_name
-      ansible.builtin.debug:
-        msg: "{{ root_pool_name }}"
-      when:
-        debug | default(false)
-
     - name: Create random key for root pool
       community.general.filesize:
         path: /etc/cryptsetup-keys.d/{{ root_pool_name }}.key
         source: /dev/urandom
         blocksize: 1024
         size: 4
-        #force: true
         owner: root
         group: root
         mode: '0600'
@@ -77,13 +75,13 @@
         passphrase: "{{ passphrase }}"
         new_keyfile: "/etc/cryptsetup-keys.d/{{ root_pool_name }}.key"
       loop: "{{ disk_by_id }}"
+      no_log: "{{ no_log_secrets | default(true) | bool }}"
 
-    - name: Query UUIDs for root partiton container devices
-      ansible.builtin.command: 
-        cmd: "blkid -s UUID -o value {{ disk_by_id | product(['-part' + root_partition + ' ']) | map('join') | join(' ')}}"
+    - name: Query UUIDs for root partition container devices
+      ansible.builtin.command:
+        cmd: "blkid -s UUID -o value {{ disk_by_id | product(['-part' + root_partition]) | map('join') | join(' ') }}"
       register: cmd_output
-      changed_when:
-        cmd_output.rc == 0
+      changed_when: false
 
     - name: Write UUIDs into list variable
       ansible.builtin.set_fact:
@@ -112,21 +110,6 @@
       loop_control:
         extended: true
 
-    # # Read here: https://cryptsetup-team.pages.debian.net/cryptsetup/README.initramfs.html
-    # - name: Generate crypttab entries
-    #   ansible.builtin.lineinfile:
-    #     path: /etc/crypttab
-    #     search_string: "crypt_{{ item | regex_search('([^\/]+$)') }}_root"
-    #     line: "crypt_{{ item | regex_search('([^\/]+$)') }}_root UUID={{ root_partition_uuids[ansible_loop.index0] }} /etc/cryptsetup-keys.d/{{ root_pool_name }}.key luks,discard,initramfs"
-    #     state: present
-    #     owner: root
-    #     group: root
-    #     mode: '0644'
-    #   loop:
-    #     - "{{ disk_by_id }}"
-    #   loop_control:
-    #     extended: true
-
     - name: Configure Keyfile Pattern for cryptsetup-initramfs
       ansible.builtin.lineinfile:
         path: /etc/cryptsetup-initramfs/conf-hook
@@ -137,9 +120,10 @@
         group: root
         mode: '0644'
 
-# [ Block for tasks that have to be done for both enryption methods] ####
-- name: Run tasks that have to be done for both enryption methods
-  when: 
+# [ Block for tasks that have to be done for both encryption methods ]#########
+# Keyfiles are embedded in the initramfs, so keep the images private
+- name: Run tasks that have to be done for both encryption methods
+  when:
     - ansible_facts['nodename'] != "localhost"
     - disk_encryption_type != "none"
   tags:
@@ -155,7 +139,7 @@
         group: root
         mode: '0644'
 
-# [Proceed with actual ZBM Installation] ################################
+# [ Proceed with actual ZBM Installation ]#####################################
 - name: Install ZFS Boot Menu Block
   when:
     - ansible_facts['nodename'] != "localhost"
@@ -164,7 +148,7 @@
   block:
     - name: Install required packages for ZBM - with recommends
       ansible.builtin.apt:
-        name: 
+        name:
           - kexec-tools
           - bsdextrautils
           - mbuffer
@@ -172,7 +156,7 @@
 
     - name: Install required packages for ZBM - without recommends
       ansible.builtin.apt:
-        name: 
+        name:
           - libconfig-inifiles-perl
           - libsort-versions-perl
           - libboolean-perl
@@ -182,7 +166,7 @@
           - git
           - dracut-core
         install_recommends: false
-        
+
     # Assign command-line arguments to be used when booting the final kernel
     - name: Get current hostid
       ansible.builtin.command:
@@ -219,7 +203,7 @@
       community.general.make:
         chdir: /usr/local/src/zfsbootmenu/
         targets: ['core', 'dracut']
-        
+
     ######################################################################
     # [ Prepare Pre and Post Hooks for generate-zbm ]#####################
     - name: Create pre and post hooks dirs and syslinux snippets dir
@@ -232,14 +216,14 @@
         - "{{ efi_boot_mountpoint }}/snippets/"
 
     - name: Copy syslinux-update.sh script
-      ansible.builtin.copy: 
+      ansible.builtin.copy:
         src: "/usr/local/src/zfsbootmenu/contrib/syslinux-update.sh"
         remote_src: true
         dest: "/etc/zfsbootmenu/generate-zbm.post.d/"
         mode: '0755'
 
     # Modify syslinux-update.sh script to let generate-zbm create a valid
-    # syslinux.cfg that can also include memtest86 snippet
+    # syslinux.cfg on the ESP, including the snippets in <ESP>/snippets
     - name: Modify syslinux-update.sh
       ansible.builtin.replace:
         path: "/etc/zfsbootmenu/generate-zbm.post.d/syslinux-update.sh"
@@ -262,7 +246,7 @@
        - '/etc/zfsbootmenu/hooks/early-setup.d/'
        - '/etc/zfsbootmenu/hooks/boot-sel.d/'
 
-    # Install Hooks for LUKS encrytion in place: 
+    # Install hooks for LUKS encryption
     - name: Fetch ZBM hook scripts and put them in place
       when: disk_encryption_type == "luks"
       ansible.builtin.get_url:
@@ -286,7 +270,7 @@
       with_items: "{{ root_partition_uuids }}"
 
     # Configure ZFSBootMenu
-    - name: Copy ZFSBootMenu Config template to /mnt/etc/zfsbootmenu/config.yaml
+    - name: Copy ZFSBootMenu Config template to /etc/zfsbootmenu/config.yaml
       ansible.builtin.template:
         src: zfsbootmenu_config.yaml.j2
         dest: "/etc/zfsbootmenu/config.yaml"

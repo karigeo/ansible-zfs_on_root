@@ -9,7 +9,7 @@
     - install-zfs-packages
     - always
   block:
-    # ZFS package installs have failed due to "not yet valid" message. This unusually happens
+    # ZFS package installs have failed due to "not yet valid" message. This usually happens
     # when time is not set correctly on the new system.  This happened often when virtualbox
     # snapshot images were used.  Restarting timesyncd service forces time to be updated.
     - name: Restarting timesync service under Virtualbox
@@ -36,20 +36,20 @@
   tags:
     - install-zfs-packages
   block:
+    # Phase 2 of the role connects on port 8922 and lands directly in the chroot
     - name: Configure sshd to allow connecting directly inside the chroot
       notify: Restart sshd
       ansible.builtin.blockinfile:
-       block: |
-         Port 22
-         Port 8922
-         Match LocalPort 8922
-           ChrootDirectory /mnt
-       path: /etc/ssh/sshd_config
-       validate: /usr/sbin/sshd -T -C lport=22 -f %s
+        block: |
+          Port 22
+          Port 8922
+          Match LocalPort 8922
+            ChrootDirectory {{ live_cd_mountpoint }}
+        path: /etc/ssh/sshd_config
+        validate: /usr/sbin/sshd -T -C lport=22 -f %s
 
     - name: Force handlers to run
       ansible.builtin.meta: flush_handlers
-  
 
 # ###[ Change APT Sources on Live CD Environment ]##############################
 - name: Update apt sources debian.sources
@@ -69,10 +69,10 @@
         dest: "/etc/apt/sources.list.d/debian.sources"
         owner: root
         group: root
-        mode: "0o644"
+        mode: "0644"
 
-# ##[ Install Packages Need to get Started ]####################################
-- name: Install Packages Need to get Started
+# ##[ Install Packages needed to get started ]##################################
+- name: Install Packages needed to get started
   when:
     - ansible_facts['os_family'] == "Debian"
     - ansible_facts['distribution'] == "Debian"
@@ -102,6 +102,5 @@
         cmd: zgenhostid -f
       register: cmd_output
       changed_when: cmd_output.rc == 0
-  
 
 ###############################################################################

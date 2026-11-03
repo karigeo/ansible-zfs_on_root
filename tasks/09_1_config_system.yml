@@ -1,6 +1,6 @@
 ---
 ###############################################################################
-# [ Should be in chroot env now ]##############################################
+# [ Runs inside the chroot (ansible_port 8922) ]###############################
 
 - name: Configure new system in chroot environment
   when:
@@ -38,8 +38,8 @@
         purge: true
       when:
         - ansible_facts['os_family'] == "Debian"
-        - remove_os_prober == true
-    
+        - remove_os_prober | bool
+
     - name: Run command to mark selected APT packages as hold
       ansible.builtin.command:
         cmd: "bash -c '{{ item }}'"

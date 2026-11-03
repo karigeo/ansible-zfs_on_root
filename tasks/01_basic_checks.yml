@@ -250,7 +250,7 @@
   ansible.builtin.set_fact:
     lvm_partition_size: "{{ (disk_by_id | length | int > 2) | ternary(raidz_lvm_partition_size, single_or_mirror_lvm_partition_size) }}"
 
-- name: Confirm Sizes of Partitons are Reasonable
+- name: Confirm Sizes of Partitions are Reasonable
   ansible.builtin.fail:
     msg: >-
       ERROR: LVM partition size ({{ lvm_partition_size }}) is not reasonable. Root partition

@@ -10,6 +10,7 @@ iface {{ iface.name }} inet {{ iface.address_type }}
     address {{ iface.network_address }}
     gateway {{ iface.gateway }}
 {% endif %}
+
 {% endfor %}
 
 {% for bridge in ipv4.bridges %}
@@ -30,8 +31,8 @@ iface {{ bridge.name }} inet {{ bridge.address_type }}
     bridge-vids {{ bridge.bridge_vids }}
 {% endif %}
 {% endif %}
-{% endfor %}
 
+{% endfor %}
 # DNS is configured in /etc/resolv.conf
 
 source /etc/network/interfaces.d/*

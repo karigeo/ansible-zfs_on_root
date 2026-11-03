@@ -28,7 +28,7 @@
         - "systemctl enable zpool-trim@{{ root_pool_name }}.service"
         - "systemctl enable zpool-trim@{{ root_pool_name }}.timer"
       when:
-        - zfs_pool_trim_systemd_service_enable | default( false) | bool
+        - zfs_pool_trim_systemd_service_enable | default(false) | bool
 
     - name: Run commands to enable ZFS Scrub Service
       ansible.builtin.command:
@@ -39,4 +39,4 @@
         - "systemctl enable zpool-scrub@{{ root_pool_name }}.service"
         - "systemctl enable zpool-scrub@{{ root_pool_name }}.timer"
       when:
-        - zfs_pool_scrub_systemd_service_enable | default( false) | bool
+        - zfs_pool_scrub_systemd_service_enable | default(false) | bool
