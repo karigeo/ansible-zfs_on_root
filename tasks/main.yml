@@ -3,9 +3,15 @@
 # Installs Debian 13 on ZFS root from a Debian Live CD. DESTRUCTIVE: all
 # partitions on "disk_devices" are erased.
 #
-# Usage (the play tags the role with [never, bootstrap]):
+# Usage:
 #   ansible-playbook -i inventory.yml playbook.yml -l <host> --tags bootstrap \
 #     --extra-vars='{disk_devices: [sda, sdb], host_name: "mynewpc", passphrase: "mys3cret"}'
+#
+# The role only runs when "bootstrap" or one of its step tags (zfs_on_root_tags
+# in vars/main.yml) is requested with --tags, so it is safe to have it in a
+# site playbook. The includes are tagged "always" and gated with that "when";
+# the included tasks get the "bootstrap" tag (apply) and are selected by their
+# own tags otherwise, so single steps and --skip-tags work.
 #
 # Devices like "sda" are converted to /dev/disk/by-id (or /dev/disk/by-path)
 # references. If "disk_devices" or "host_name" is not specified, you will be
@@ -21,14 +27,19 @@
 # [ Load up the secret files ]#####################################################################
 - name: Include Secret Files
   ansible.builtin.include_vars: "{{ item }}"
-  tags: ["bootstrap"]
+  tags: ["always"]
+  when: ansible_run_tags | intersect(zfs_on_root_tags) | length > 0
   loop:
     - secrets/main.yml
   no_log: "{{ no_log_secrets | default(true) }}"
 
 - name: Include Task Files to Configure and Setup Live CD Environment and Base System
-  ansible.builtin.include_tasks: "{{ task_names }}"
-  tags: ["bootstrap"]
+  ansible.builtin.include_tasks:
+    file: "{{ task_names }}"
+    apply:
+      tags: ["bootstrap"]
+  tags: ["always"]
+  when: ansible_run_tags | intersect(zfs_on_root_tags) | length > 0
   loop:
     - 01_test_virtualbox.yml
     - 01_basic_checks.yml
@@ -48,8 +59,12 @@
 - name: Include Task Files to Configure new System in chroot
   vars:
     ansible_port: 8922
-  ansible.builtin.include_tasks: "{{ task_names }}"
-  tags: ["bootstrap"]
+  ansible.builtin.include_tasks:
+    file: "{{ task_names }}"
+    apply:
+      tags: ["bootstrap"]
+  tags: ["always"]
+  when: ansible_run_tags | intersect(zfs_on_root_tags) | length > 0
   loop:
     - 09_1_config_system.yml
     - 10_install_zfs.yml
@@ -65,8 +80,12 @@
     loop_var: task_names
 
 - name: Include Task Files to Reboot, Reconnect and Finalize new System Config
-  ansible.builtin.include_tasks: "{{ task_names }}"
-  tags: ["bootstrap"]
+  ansible.builtin.include_tasks:
+    file: "{{ task_names }}"
+    apply:
+      tags: ["bootstrap"]
+  tags: ["always"]
+  when: ansible_run_tags | intersect(zfs_on_root_tags) | length > 0
   loop:
     - 15_unmount_chroot.yml
     - 16_restart_remote.yml

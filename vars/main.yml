@@ -5,6 +5,38 @@
 ####### Nothing Below Here Needs to be Edited ############
 ###############################################################################
 
+# Tags that activate the role (see tasks/main.yml). "bootstrap" runs everything,
+# the others run single steps. Keep in sync with the tags used in tasks/.
+zfs_on_root_tags:
+  - bootstrap
+  - confirm_defaults
+  - apply_apt_proxy
+  - install-zfs-packages
+  - clear_partition_tables_from_devices
+  - create_partitions
+  - create_luks_containers
+  - create_pools
+  - create_filesystems
+  - create_datasets
+  - config_system
+  - install_zfs
+  - config_boot_fs
+  - install_refind
+  - install_syslinux
+  - install_zfsbootmenu
+  - config_swap
+  - system_tweaks
+  - first_boot_prep
+  - unmount_chroot
+  - reboot_remote
+  - localization
+  - install_dropbear
+  - config_lvm
+  - final_setup
+  - disable_ipv6
+  - update_sshd_settings
+  - restart_remote_final
+
 # Debian release to install (debootstrap suite and apt sources)
 distro_release: "trixie"
 
