@@ -145,6 +145,14 @@ efi_boot_path: "{{ efi_boot_mountpoint }}/EFI"
 # Path for ZFSBootMenu
 zfs_boot_menu_path: "{{ efi_boot_path }}/zfsbootmenu"
 
+# ZFSBootMenu source repository and release (tag) to build
+zfs_boot_menu_repo_url: "https://github.com/zbm-dev/zfsbootmenu"
+zfs_boot_menu_version: "v3.1.0"
+
+# zbm-luks-unlock hooks (LUKS unlock inside ZFSBootMenu), pinned to a commit
+zbm_luks_unlock_base_url: "https://raw.githubusercontent.com/agorgl/zbm-luks-unlock"
+zbm_luks_unlock_version: "6e5a6cf8e7430417d84431393fe6536bdc54658f"
+
 # Path for rEFInd
 refind_path: "{{ efi_boot_path }}/refind"
 
