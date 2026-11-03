@@ -2,23 +2,28 @@
 galaxy_info:
   author: Simon Nibler
   description: |
-    ZFS on Root for Debian 12 with rules based on device numbers presented.
-    Native ZFS Encryption, LUKS Encryption, UEFI, Dropbear support and some SSH tweaks.
+    Debian 13 (Trixie) on ZFS root with ZFSBootMenu, rEFInd (UEFI) and syslinux
+    (legacy BIOS), rules based on the number of devices. Optional LUKS or ZFS
+    native encryption, Dropbear remote unlock, LVM partition. Base for Proxmox VE.
 
   platforms:
     - name: Debian
-      release: bookworm
-
+      versions:
+        - trixie
 
   license: "license (BSD, MIT)"
 
-  min_ansible_version: "2.4"
+  # ansible.builtin.mount_facts requires ansible-core 2.18
+  min_ansible_version: "2.18"
 
   galaxy_tags:
     - zfs
     - debian
     - uefi
-    - nonroot
+    - zfsbootmenu
     - dropbear
     - baremetal
+    - proxmox
 
+# Required collections: community.general, community.crypto, ansible.posix
+dependencies: []

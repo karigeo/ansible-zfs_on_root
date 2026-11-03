@@ -15,31 +15,16 @@
     #   when:
     #     - ansible_facts['os_family'] == "Debian"
 
-    - name: Install Dracut-Network and Dropbear
+    # dropbear-bin only provides the binaries for the dracut crypt-ssh module in
+    # the ZFSBootMenu image: no dropbear service on the host and no dropbear in
+    # the host initramfs (unlike the dropbear / dropbear-initramfs packages)
+    - name: Install Dracut-Network and Dropbear binaries
       ansible.builtin.apt:
-        name: ['dracut-network', 'dropbear', 'isc-dhcp-client']
+        name: ['dracut-network', 'dropbear-bin', 'isc-dhcp-client']
         state: present
       when:
         - ansible_facts['os_family'] == "Debian"
 
-    - name: Stop and disable dropbear.service on host
-      ansible.builtin.systemd_service:
-        name: dropbear
-        enabled: false
-        state: stopped
-
-    - name: Copy dropbear initramfs hook script in place and make it non executable
-      ansible.builtin.copy:
-        dest: /usr/share/initramfs-tools/hooks/dropbear.disabled
-        src: /usr/share/initramfs-tools/hooks/dropbear
-        remote_src: true
-        mode: "0644"
-    
-    - name: Remove original dropbear initramfs hook script
-      ansible.builtin.file:
-        path: /usr/share/initramfs-tools/hooks/dropbear
-        state: absent
-        
     - name: Remove dracut-crypt-ssh directory
       ansible.builtin.file:
         path: "{{ item }}"

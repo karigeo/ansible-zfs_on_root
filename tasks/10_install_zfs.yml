@@ -10,11 +10,8 @@
   block:
     - name: Install Kernel Driver Packages
       ansible.builtin.apt:
-        name: >-
-          {{
-            (['dkms']) +
-            (['software-properties-common'] if distro_release == 'bookworm' else [])
-          }}
+        name:
+          - dkms
         install_recommends: false
       when:
         - ansible_facts['os_family'] == "Debian"
@@ -30,7 +27,6 @@
         name:
           - linux-headers-generic
           - linux-image-generic
-          - dropbear-initramfs
           - wget
           - nano
           - vim
@@ -41,15 +37,6 @@
           - zfs-initramfs
           - zfs-dkms
         install_recommends: false
-      when:
-        - ansible_facts['os_family'] == "Debian"
-
-    - name: Purge os-prober
-      ansible.builtin.apt:
-        name:
-          - os-prober
-        state: absent
-        purge: true
       when:
         - ansible_facts['os_family'] == "Debian"
 

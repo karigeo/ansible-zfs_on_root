@@ -44,6 +44,30 @@
       when:
         - ansible_facts['os_family'] == "Debian"
 
+    # The ESP is an mdadm mirror on multi-disk installs. Add a UEFI boot entry
+    # for the ESP partition of every disk, so any remaining disk can boot.
+    - name: Get existing UEFI boot entries
+      ansible.builtin.command:
+        cmd: efibootmgr
+      register: efi_boot_entries
+      changed_when: false
+      when:
+        - uefi_mode
+        - disk_by_id | length | int > 1
+
+    - name: Create a rEFInd UEFI boot entry for every disk
+      ansible.builtin.command:
+        cmd: >-
+          efibootmgr --create --disk {{ item }} --part {{ boot_partition }}
+          --loader '\{{ refind_efi_pathname }}' --label 'rEFInd {{ item | basename }}'
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      loop: "{{ disk_by_id }}"
+      when:
+        - uefi_mode
+        - disk_by_id | length | int > 1
+        - ("rEFInd " ~ (item | basename)) not in efi_boot_entries.stdout
+
     - name: Copy rEFInd template to /mnt/boot/efi/EFI/zfsbootmenu/refind_linux.conf
       ansible.builtin.template:
         src: refind_linux.conf.j2

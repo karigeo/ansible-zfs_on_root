@@ -1,8 +1,6 @@
 ---
-#
-# This role/task will detect if Ansible is running under VirtualBox and
-# then set a variable named "virtual_box" to true or false
-#
+# Detect if Ansible is running under VirtualBox and set "virtual_box" to
+# true or false. Used to resync the clock before installing packages.
 - name: Check if lspci is installed
   ansible.builtin.stat:
     path: /usr/bin/lspci
@@ -10,35 +8,22 @@
   tags:
     - always
 
-# Determine if running under Virtual Box
 - name: Determine if running under Virtual Box
   when:
-    - ansible_facts['os_family'] == "Debian" or
-      ansible_facts['os_family'] == "Archlinux"
-    - stat_lspci.stat.exists is defined and stat_lspci.stat.exists
+    - stat_lspci.stat.exists
   tags:
     - always
   block:
     - name: Checking lspci device list
       ansible.builtin.command: "lspci"
       register: pci_devices
-      changed_when: pci_devices.rc == 0
+      changed_when: false
 
     # Under virtual box there will be a PCI device
     - name: Check if VirtualBox is within pci_devices
       ansible.builtin.set_fact:
-        virtual_box: "{{ (pci_devices.stdout.find('VirtualBox') == -1) | ternary(false, true) }}"
+        virtual_box: "{{ 'VirtualBox' in pci_devices.stdout }}"
 
     - name: Display Debug Message
       ansible.builtin.debug:
         msg: "VirtualBox Detected: {{ virtual_box }}"
-
-# If check not defined for OS Family above then fail.
-- name: Display failure message
-  ansible.builtin.fail:
-    msg: "ERROR - VirtualBox Check not defined for {{ ansible_facts['os_family'] }}"
-  when:
-    - ansible_facts['os_family'] != "Debian" and
-      ansible_facts['os_family'] != "Archlinux"
-  tags:
-    - always

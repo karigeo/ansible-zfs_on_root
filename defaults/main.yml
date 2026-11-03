@@ -246,11 +246,8 @@ zfs_pool_scrub_systemd_oncalendar: "monthly"
 ###############################################################################
 # SSH Settings
 ###############################################################################
-# The following SSHD Settings will be applied at final_cleanup
-# IMPORTANT: Only some basic settings which can be search and replaced using
-#            values such as works such as: "yes", "no", "none", "any",
-#            "prohibit-password", digits (such as 10, 22, or 2m). This does not
-#            match fancy items like IP Address or full directory paths.
+# Applied in final_setup as drop-in /etc/ssh/sshd_config.d/50-zfs_on_root.conf
+# (one "Key value" line per entry, overrides /etc/ssh/sshd_config).
 update_sshd_settings: true
 apply_sshd_settings:
   PasswordAuthentication: "no"

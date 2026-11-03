@@ -26,7 +26,6 @@ _NOTE: This Ansible role is not structured as rigid as a typical Ansible role sh
 * UEFI and Legacy Booting supported (can even switch between them)
 * Customized SSH Configuration Options
 * DropBear support for unlocking ZFS encrypted pool remotely
-* Disable Externally Managed Python Environmen (i.e. Ignore PEP 668)
 * Support for Apt-Cacher-NG proxy for cached packages
 
 ---
