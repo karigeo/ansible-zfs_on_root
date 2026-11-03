@@ -31,8 +31,8 @@
 
     - name: Remove ZFS labels from previous usage
       ansible.builtin.command:
-        cmd: "zpool labelclear -f {{ item }}-part3"
-        removes: "{{ item }}-part3"
+        cmd: "zpool labelclear -f {{ item }}-part{{ root_partition }}"
+        removes: "{{ item }}-part{{ root_partition }}"
       register: cmd_output
       changed_when:
         cmd_output.rc == 0
@@ -40,24 +40,23 @@
       loop:
         "{{ disk_by_id }}"
 
-    - name: Check exisiting LUKS containers on specified disks
+    - name: Check existing LUKS containers on specified disks
       ansible.builtin.shell: |
         lsblk -l -o NAME,FSTYPE,UUID | awk -F ' ' ' /{{ disk_devices | join('|') }}/ { if ( (NF == 3) && ($2 == "crypto_LUKS") ) {print $3} }'
       register: cmd_output
-      changed_when:
-        cmd_output.rc == 0
+      changed_when: false
       ignore_errors: true
-    
-    - name: Get list of open LUKS containers
+
+    - name: Get list of existing LUKS containers
       ansible.builtin.set_fact:
-        current_luks_containers: "{{ cmd_output.stdout | split('\n') }}"
+        current_luks_containers: "{{ cmd_output.stdout_lines | default([]) | select | list }}"
 
     - name: Debug list of open LUKS containers
       ansible.builtin.debug:
         msg: "{{ current_luks_containers }}"
       when:
         - debug | default(false)
-    
+
     - name: Close (and remove) open LUKS containers
       community.crypto.luks_device:
         uuid: "{{ item }}"
@@ -85,12 +84,13 @@
         "{{ disk_by_id | list | product([boot_partition, swap_partition, lvm_partition]) | map('join','-part') }}"
 
     - name: Get partition infos for all disks
-      command: "lsblk -o NAME,PARTTYPE,TYPE,PATH -J {{ item }}"
+      ansible.builtin.command: "lsblk -o NAME,PARTTYPE,TYPE,PATH -J {{ item }}"
       loop: "{{ disk_by_id }}"
       register: partinfos
+      changed_when: false
 
     - name: Filter for EFI-Partitions
-      set_fact:
+      ansible.builtin.set_fact:
         efi_partitions: >-
           {{
             (efi_partitions | default([])) +
@@ -109,7 +109,7 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
       loop:
-        "{{ efi_partitions }}"
+        "{{ efi_partitions | default([]) }}"
 
     - name: Wipe filesystem information
       ansible.builtin.command:

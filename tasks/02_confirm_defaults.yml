@@ -25,8 +25,8 @@
                      Swap Size: {{ single_or_mirror_swap_partition_size_mb }} MB
       {% endif %}
       {% if disk_by_id | length | int > 2 %}
-                          Type: RAID
-                     Swap Size: {{ raidz_swap_partition_size_mb | int * (disk_by_id | length | int - 1) }} MB
+                          Type: RAID10
+                     Swap Size: {{ (raidz_swap_partition_size_mb | int * (disk_by_id | length | int) / 2) | int }} MB
       {% endif %}
       {% endif %}
 
@@ -68,11 +68,10 @@
       {% endif %}
 
         Encryption Type to use: {{ disk_encryption_type }}
-      {% if root_pool_encryption | default(false) | bool == true %}
-          Encryption Passphrase: {{ (no_log_secrets | default(true)) | ternary("**********", passphrase) }}
+      {% if disk_encryption_type in ["luks", "native"] %}
+         Encryption Passphrase: {{ (no_log_secrets | default(true)) | ternary("**********", passphrase) }}
       {% else %}
-        To enable Encryption:
-        Add passphrase: "<your_passphrase>" to --extra-vars='{disk_devices: {{ disk_devices }},host_name: "{{ host_name }}",passphrase: "mys3cret"}'
+        To enable encryption set disk_encryption_type to "luks" or "native".
       {% endif %}
 
       ############ Press Ctrl-C to abort or ENTER to continue ############

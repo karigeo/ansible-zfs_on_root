@@ -21,6 +21,8 @@
         src: efivarfs
         fstype: efivarfs
         state: ephemeral
+      when:
+        - uefi_mode
 
     - name: Create Directories for zfs-boot-menu and refind
       ansible.builtin.file:
@@ -69,12 +71,14 @@
         replace: 'timeout {{ refind_boot_menu_timeout }}'
 
     - name: Create directory for rEFInd theme
-      ansible.builtin.file: 
+      ansible.builtin.file:
         state: directory
         path: "{{ refind_path }}/themes/{{ refind_theme_name }}/"
         owner: root
         group: root
-        
+      when:
+        - refind_theming | bool
+
     - name: Fetch rEFInd theme
       ansible.builtin.git:
         clone: true
@@ -82,6 +86,8 @@
         dest: "{{ refind_path }}/themes/{{ refind_theme_name }}"
         version: master
         force: true
+      when:
+        - refind_theming | bool
 
     - name: Config rEFInd to use theme
       ansible.builtin.lineinfile:
@@ -91,6 +97,8 @@
         owner: root
         group: root
         mode: '0644'
+      when:
+        - refind_theming | bool
 
     - name: Add custom menuentry for ZBM
       ansible.builtin.blockinfile:
@@ -98,7 +106,9 @@
           menuentry "ZFSBootMenu" {
               loader {{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}/vmlinuz-bootmenu
               initrd {{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}/initramfs-bootmenu.img
-              icon {{ refind_path[ efi_boot_mountpoint | length :] }}/themes/refind-ambience/icons/os_proxmox.png
+          {% if refind_theming | bool %}
+              icon {{ refind_path[ efi_boot_mountpoint | length :] }}/themes/{{ refind_theme_name }}/icons/os_proxmox.png
+          {% endif %}
           }
         insertbefore: "include themes"
         marker: "## {mark} ANSIBLE MANAGED CUSTOM BOOT ENTRY ##"

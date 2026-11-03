@@ -144,11 +144,31 @@
             group: root
             mode: '644'
             state: present
-        - name: Re-create initramfs
-          ansible.builtin.command:
-            cmd: "update-initramfs -c -k all"
-          register: cmd_output
-          changed_when: cmd_output.rc == 0
+
+    # mdadm arrays (ESP, swap) exist now - record them so they are assembled
+    # with stable names at boot
+    - name: Scan assembled mdadm arrays
+      ansible.builtin.command:
+        cmd: mdadm --detail --scan
+      register: mdadm_scan
+      changed_when: false
+      when:
+        - disk_by_id | length | int > 1
+
+    - name: Record mdadm arrays in /etc/mdadm/mdadm.conf
+      ansible.builtin.blockinfile:
+        path: /etc/mdadm/mdadm.conf
+        marker: "# {mark} ANSIBLE MANAGED ARRAYS"
+        block: "{{ mdadm_scan.stdout }}"
+      when:
+        - disk_by_id | length | int > 1
+
+    # Picks up mdadm.conf, crypttab and initramfs module changes made after the ZBM step
+    - name: Update initramfs
+      ansible.builtin.command:
+        cmd: "update-initramfs -u -k all"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
 
     - name: Pause for a second to settle
       ansible.builtin.pause:

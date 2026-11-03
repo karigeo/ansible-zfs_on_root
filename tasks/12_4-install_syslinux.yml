@@ -51,14 +51,3 @@
       ignore_errors: true
       loop:
         "{{ disk_by_id }}"
-
-    - name: Copy Logo Images and Icons
-      ansible.builtin.copy:
-        src: "{{ refind_path }}/themes/{{ refind_theme_name }}/background.png"
-        dest: "{{ syslinx_path }}/"
-        remote_src: true
-        owner: "root"
-        group: "root"
-        mode: "0644"
-      when:
-        - refind_theming  | default(false)

@@ -26,14 +26,12 @@ iface {{ bridge.name }} inet {{ bridge.address_type }}
     bridge-fd 0
 {% if bridge.vlan_aware | default(false) %}
     bridge-vlan-aware yes
-{% if bridge.bridge_vids %}
+{% if bridge.bridge_vids | default('') %}
     bridge-vids {{ bridge.bridge_vids }}
 {% endif %}
 {% endif %}
 {% endfor %}
 
-# DNS-Konfiguration (global)
-dns-nameservers {{ ipv4.dns_nameserver }}
-dns-search {{ ipv4.dns_search_domain }}
+# DNS is configured in /etc/resolv.conf
 
 source /etc/network/interfaces.d/*

@@ -20,9 +20,18 @@ boot_partition_size_mb: "512"
 uefi_partition_flags: "-a1 -n{{ boot_partition }}:1M:+{{ boot_partition_size_mb }}M -A{{ boot_partition }}:set:2 -t{{ boot_partition }}:EF00"
 # uefi_partition_flags: "-n{{ boot_partition }}:1M:+{{ boot_partition_size_mb }}M -t{{ boot_partition }}:EF00"
 
-# Possible SWAP Partition Flags based on one device or more
-single_disk_or_mirror_swap_flags: "-n{{ swap_partition }}:0:+{{ single_or_mirror_swap_partition_size_mb }}M -t{{ swap_partition }}:8200"
-raidz_multi_disk_swap_flags: "-n{{ swap_partition }}:0:+{{ raidz_swap_partition_size_mb }}M -t{{ swap_partition }}:FD00"
+# Swap partition size per device: 1-2 devices use the single/mirror size, 3+ the raidz size
+swap_partition_size_mb: "{{ (disk_by_id | length | int > 2) | ternary(raidz_swap_partition_size_mb, single_or_mirror_swap_partition_size_mb) }}"
+
+# Swap partition flags: Linux swap (8200) on a single device, Linux RAID (FD00) when
+# the swap partitions are joined into an mdadm array
+swap_partition_flags: "-n{{ swap_partition }}:0:+{{ swap_partition_size_mb }}M -t{{ swap_partition }}:{{ (disk_by_id | length | int > 1) | ternary('FD00', '8200') }}"
+
+# mdadm array used for swap on multi-device installs
+swap_dev_name: "/dev/md/swap"
+
+# Block device holding swap: the swap partition (single device) or the mdadm array
+swap_device: "{{ (disk_by_id | length | int > 1) | ternary(swap_dev_name, disk_by_id[0] ~ '-part' ~ swap_partition) }}"
 
 # Define Root Pool Partition Flags
 root_partition_flags: "-n{{ root_partition }}:0:{{ root_partition_size }} -t{{ root_partition }}"
@@ -34,6 +43,12 @@ root_partition_name_suffix: "-part{{ root_partition }}"
 single_disk_or_mirror_lvm_partition_type: "{{ '8e00' if disk_encryption_type == 'none' else '8309' if disk_encryption_type == 'luks' or disk_encryption_type == 'native' }}"
 single_disk_or_mirror_lvm_flags: "-n{{ lvm_partition }}:0:{{ single_or_mirror_lvm_partition_size }} -t{{ lvm_partition }}:{{ single_disk_or_mirror_lvm_partition_type }}"
 raidz_multi_disk_lvm_flags: "-n{{ lvm_partition }}:0:{{ raidz_lvm_partition_size }} -t{{ lvm_partition }}:FD00"
+
+# mdadm array used for LVM on multi-device installs
+lvm_dev_name: "/dev/md/lvm"
+
+# Block device holding the LVM PV (or its LUKS container): the LVM partition or the mdadm array
+lvm_device: "{{ (disk_by_id | length | int > 1) | ternary(lvm_dev_name, disk_by_id[0] ~ '-part' ~ lvm_partition) }}"
 
 # Enable root pool encryption (default false) - This will be set to true when a passphrase
 # is specified as an extra variable.
@@ -63,12 +78,16 @@ root_pool_encryption_options:
   - "-o keylocation=prompt"
   - "-o keyformat=passphrase"
 
-# Define rpool zpool create parameters list
-root_pool_device_names:
-  "{{ (disk_encryption_type == 'luks') | ternary(['/dev/mapper/crypt_'] | product(disk_by_id|map('regex_search','([^\/]+$)')|list) | map('join','') | product(['_root']) | map('join','') | join(' ') + ' ',disk_by_id | join(root_partition_name_suffix + ' ') + root_partition_name_suffix + ' ') }}"
+# Device-mapper names of the LUKS containers holding the root pool (one per disk)
+luks_root_mapper_names: "{{ disk_by_id | map('basename') | map('regex_replace', '^', 'crypt_') | map('regex_replace', '$', '_root') | list }}"
+
+# Block devices the root pool is built from: LUKS mappers or the raw root partitions
+root_pool_devices: "{{ (disk_encryption_type == 'luks')
+  | ternary(['/dev/mapper/'] | product(luks_root_mapper_names) | map('join') | list,
+            disk_by_id | product([root_partition_name_suffix]) | map('join') | list) }}"
 
 root_pool_create_params:
-  "{{ root_pool_options | join(' ') }} {{ root_pool_type }} {{ root_pool_device_names }}"
+  "{{ root_pool_options | join(' ') }} {{ root_pool_type }} {{ root_pool_devices | join(' ') }}"
 
 root_pool_container_options:
   - "-o canmount=off"

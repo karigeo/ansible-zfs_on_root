@@ -136,7 +136,7 @@
       ansible.builtin.lineinfile:
         path: /etc/cryptsetup-initramfs/conf-hook
         regexp: '^(#+KEYFILE_PATTERN=|KEYFILE_PATTERN=)'
-        line: "KEYFILE_PATTERN=\"/etc/cryptsetup-keys.d/*.key\""
+        line: "KEYFILE_PATTERN=\"/etc/cryptsetup-keys.d/{{ root_pool_name }}.key\""
         state: present
         owner: root
         group: root
@@ -281,6 +281,7 @@
 
     # Write UUIDs of devices to be encrypted:
     - name: Add UUIDs of root partitions to decrypt to config file
+      when: disk_encryption_type == "luks"
       ansible.builtin.lineinfile:
         create: true
         line: "{{ item }}"
@@ -302,40 +303,6 @@
       ansible.builtin.template:
         src: snippets_01_header.j2
         dest: "{{ efi_boot_mountpoint }}/snippets/01_header"
-        owner: "root"
-        group: "root"
-        mode: "0644"
-
-    # # Download and install memtest86
-    # # EFI version is latest v10, syslinux version is v4
-    # - name: Run commands to download and install memtest86
-    #   ansible.builtin.command:
-    #     cmd: "{{ item }}"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
-    #   with_items:
-    #     - "rm -rf /tmp/memtest86 && mkdir -p /tmp/memtest86/mnt"
-    #     - "mkdir -p {{ efi_boot_path }}/tools/memtest86"
-    #     - "curl -L https://www.memtest86.com/downloads/memtest86-usb.zip -o /tmp/memtest86/memtest86-usb.zip"
-    #     - "curl -L https://www.memtest86.com/downloads/memtest86-4.3.7-iso.zip -o /tmp/memtest86/memtest86-iso.zip"
-    #     # For EFI
-    #     - "unzip -d /tmp/memtest86 /tmp/memtest86/memtest86-usb.zip memtest86-usb.img"
-    #     - "losetup -P /dev/loop33 /tmp/memtest86/memtest86-usb.img"
-    #     - "mount -o loop /dev/loop33p1 /tmp/memtest86/mnt"
-    #     - "cp /tmp/memtest86/mnt/EFI/BOOT/BOOTX64.efi {{ efi_boot_path }}/tools/memtest86/memtest86.efi"
-    #     - "umount /tmp/memtest86/mnt"
-    #     - "losetup -d /dev/loop33"
-    #     # For Syslinux
-    #     - "unzip -d /tmp/memtest86 /tmp/memtest86/memtest86-iso.zip Memtest86-4.3.7.iso"
-    #     - "mount -o loop /tmp/memtest86/Memtest86-4.3.7.iso /tmp/memtest86/mnt"
-    #     - "cp /tmp/memtest86/mnt/isolinux/memtest {{ efi_boot_path }}/tools/memtest86/memtest86.syslinux"
-    #     - "umount /tmp/memtest86/mnt"
-
-    # Syslinux entry for memtest86+
-    - name: Copy Header for syslinux.cfg template to /boot/efi/snippets/05_memtest86
-      ansible.builtin.template:
-        src: snippets_05_memtest86.j2
-        dest: "{{ efi_boot_mountpoint }}/snippets/05_memtest86"
         owner: "root"
         group: "root"
         mode: "0644"
