@@ -8,6 +8,7 @@ An Ansible role that installs Debian 13 (Trixie) on ZFS root from a Debian Live 
 
 - Fork of [reefland/ansible-zfs_on_root](https://github.com/reefland/ansible-zfs_on_root) (Ubuntu), adapted to Debian/PVE.
 - Sibling role: `../ansible_deb_btrfs-on-root` (BTRFS + GRUB, evolved from this role). Fixes often apply to both; compare before porting.
+- Open tasks, the VM test matrix and the list of fixes to port to the btrfs role: `NEXT_STEPS.md`.
 
 ## Running the Role
 
