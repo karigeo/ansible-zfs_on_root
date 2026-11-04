@@ -249,6 +249,8 @@
 - name: Store LVM partition size based on array type (i.e. disk numbers)
   ansible.builtin.set_fact:
     lvm_partition_size: "{{ (disk_by_id | length | int > 2) | ternary(raidz_lvm_partition_size, single_or_mirror_lvm_partition_size) }}"
+  tags:
+    - always
 
 - name: Confirm Sizes of Partitions are Reasonable
   ansible.builtin.fail:
