@@ -18,4 +18,6 @@ esac
 
 . /usr/share/initramfs-tools/hook-functions
 
-copy_file key "{{ zfs_native_keyfile }}"
+# The zdev hook of Debian's zfs-initramfs already copies all of /etc/zfs. copy_file
+# returns 1 when the file is already in the image, which is fine here.
+copy_file key "{{ zfs_native_keyfile }}" || [ $? -eq 1 ]
