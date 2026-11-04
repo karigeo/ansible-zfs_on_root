@@ -136,6 +136,15 @@
         prepend_newline: true
         append_newline: true
 
+    # Without it rEFInd picks the first entry it finds; its default scan order lists
+    # boot media (e.g. a live USB stick still plugged in) before the manual ZBM entry.
+    - name: Make the ZFSBootMenu entry the rEFInd default
+      ansible.builtin.lineinfile:
+        path: "{{ refind_path }}/refind.conf"
+        regexp: '^default_selection '
+        line: 'default_selection "ZFSBootMenu"'
+        state: present
+
     - name: Configure display resolution for rEFInd
       ansible.builtin.lineinfile:
         path: "{{ refind_path }}/refind.conf"
