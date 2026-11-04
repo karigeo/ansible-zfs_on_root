@@ -1,1 +1,5 @@
+{% if disk_encryption_type == "luks" %}
+Welcome to the ZFSBootMenu initramfs shell. Enter "unlock-luks" to enter the LUKS passphrase, then "zbm" to start ZFSBootMenu.
+{% else %}
 Welcome to the ZFSBootMenu initramfs shell. Enter "zfsbootmenu" or "zbm" to start ZFSBootMenu.
+{% endif %}

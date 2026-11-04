@@ -128,7 +128,19 @@
         regexp: '(^.* /sbin/dropbear .*$)'
         replace: '\1 -b /etc/banner.txt'
 
-    - name: Add network banner to dracut module setup
+    # The zbm-luks-unlock hook prompts on the console only; unlock-luks lets the
+    # dropbear session answer it (see files/zbm-unlock-luks.sh)
+    - name: Copy remote LUKS unlock command for the ZBM image
+      ansible.builtin.copy:
+        src: zbm-unlock-luks.sh
+        dest: /etc/zfsbootmenu/unlock-luks.sh
+        owner: root
+        group: root
+        mode: '0755'
+      when:
+        - disk_encryption_type == "luks"
+
+    - name: Add network banner (and unlock-luks) to dracut module setup
       ansible.builtin.replace:
         path: "/usr/lib/dracut/modules.d/60crypt-ssh/module-setup.sh"
         after: '(install\(\) {)'
@@ -137,6 +149,10 @@
             #
             # Copy dropbear welcome banner message
               inst /etc/zfsbootmenu/dracut.conf.d/banner.txt /etc/banner.txt
+            {% if disk_encryption_type == "luks" %}
+            # Remote LUKS unlock command
+              inst /etc/zfsbootmenu/unlock-luks.sh /usr/bin/unlock-luks
+            {% endif %}
             }
 
     # [ Host Keys ]############################################################

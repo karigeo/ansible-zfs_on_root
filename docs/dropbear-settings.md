@@ -67,9 +67,10 @@ Welcome to the ZFSBootMenu initramfs shell. Enter "zfsbootmenu" or "zbm" to star
 zfsbootmenu ~ >
 ```
 
-* Enter `zbm` to access ZFSBootMenu.
-* You are prompted for the passphrase: for LUKS the partitions to unlock are listed first, for ZFS native encryption the prompt names the pool (`Enter passphrase for '<root_pool_name>':`).
+* **LUKS:** enter `unlock-luks`. It lists the partitions to unlock and asks for the passphrase. The LUKS hook of ZFSBootMenu asks on the console only and ZFSBootMenu waits for it; `unlock-luks` answers it from the SSH session, after that ZFSBootMenu continues on the console and boots the default boot environment. Enter `zbm` to choose another one instead.
+* **ZFS native encryption:** enter `zbm`. The prompt names the pool (`Enter passphrase for '<root_pool_name>':`).
 * Select what to boot (or roll back to a snapshot). The connection is closed and the system boots. Dropbear does not run once the system has booted.
+* With `remoteaccess_ip_config: "dhcp"` ZFSBootMenu requests its own lease. Depending on the DHCP server it can get a different address than the installed system (e.g. a reservation for the MAC address that is not applied), use `"static"` if the address must be known.
 
 ### Changing the Dropbear Banner Text
 
