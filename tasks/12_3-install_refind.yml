@@ -6,6 +6,15 @@
   tags:
     - install_refind
   block:
+    # The role runs refind-install itself; the package postinst would install it a
+    # second time (and stack another ESP mount, see below)
+    - name: Don't let the refind package install itself to the ESP
+      ansible.builtin.debconf:
+        name: refind
+        question: refind/install_to_esp
+        vtype: boolean
+        value: "false"
+
     - name: Install rEFInd Boot Manager
       ansible.builtin.apt:
         name:
@@ -41,6 +50,21 @@
       changed_when: cmd_output.rc == 0
       when:
         - ansible_facts['os_family'] == "Debian"
+
+    # refind-install always runs "mount /boot/efi", which stacks another mount on
+    # the already mounted ESP. mvrefind (legacy BIOS) then aborts with "doesn't seem
+    # to be on a VFAT filesystem", and the unmount phase has to unwind the stack.
+    - name: Remove ESP mounts stacked by refind-install
+      ansible.builtin.shell:
+        cmd: |
+          n=0
+          while [ "$(grep -c " {{ efi_boot_mountpoint }} " /proc/self/mountinfo)" -gt 1 ]; do
+            umount {{ efi_boot_mountpoint }}
+            n=$((n + 1))
+          done
+          echo "$n"
+      register: esp_unstack
+      changed_when: esp_unstack.stdout != "0"
 
     # The ESP is an mdadm mirror on multi-disk installs. Add a UEFI boot entry
     # for the ESP partition of every disk, so any remaining disk can boot.
