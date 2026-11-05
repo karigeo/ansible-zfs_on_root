@@ -148,6 +148,15 @@
   tags:
     - config_lvm
   block:
+    # thin_check is required to activate thin pools; without it the pool stays
+    # inactive after boot (unless a crypt_lvm unlock happens to activate it)
+    - name: Install thin-provisioning-tools for the LVM thin pool
+      ansible.builtin.apt:
+        name: thin-provisioning-tools
+        state: present
+      when:
+        - lvm_volume_is_thin | bool
+
     - name: Create a LVM thin pool
       community.general.lvol:
         vg: "{{ lvm_vg_name }}"
