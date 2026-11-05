@@ -40,7 +40,7 @@ Proxmox VM (q35, 15 GB disks), Debian Live 13.7.0 standard (kernel 6.12.107), in
 - [x] `apt-mark showhold` lists the grub packages (the `grub-*` glob works, see 3.4).
 - [x] Step tags (case 8): untagged run does nothing; `install-zfs-packages`, `clear_partition_tables_from_devices`, `create_partitions`, `create_pools` one after another run only their step + checks.
 - [x] Rerun on the installed system: phase-3 tags (`config_lvm`, `install_dropbear`) work, `changed=0` for `config_lvm` (after `0cd9930`).
-- [ ] Phase-2 tags (`config_swap`, ...) on the installed system: connect to port 8922 (live CD chroot sshd) and fail as unreachable. Decide: keep (fails safe, these steps partition/format) or switch the port to 22 when not on the live CD.
+- [x] Environment checks (`00_check_environment.yml`, 2026-11-05, case 8): full `--tags bootstrap` passes all four checks. Refused with a clear message and no changes: `config_swap` on a fresh live CD (no root dataset at `/mnt`), `create_partitions` with a target partition mounted at `/media/t`, `config_swap` with an unchrooted sshd on 8922, `localization` on the live CD; on the installed system `clear_partition_tables_from_devices` (no `boot=live`; with `require_live_cd=false`: target disk in use), `unmount_chroot`, `config_swap` (partition table and ZBM image unchanged). `config_lvm` on the installed system still runs, `changed=0`. Port 8922 stays: it is transport only, the checks provide the safety.
 
 ## 3. Noticed but left unchanged (possible later work)
 
@@ -93,6 +93,7 @@ Verified against the btrfs code on 2026-11-04. Commit hashes refer to this repos
 ### Bugs present in the btrfs role
 
 - [ ] **Step tags don't work** (`tasks/main.yml`): includes tagged only `bootstrap` (btrfs a2bae3f), so `--tags create_partitions` etc. run nothing. Port the `always` + `when: ansible_run_tags | intersect(<role>_tags)` gating with `apply: tags: [bootstrap]` and a tag list var (`246ea21`). Its CLAUDE.md documents step tags that currently don't work.
+- [ ] **Environment checks** (port together with the step tags, which would otherwise open the same hole): once step tags work, `--tags <wipe/partition step>` against an installed system runs on port 22 and wipes its disks. Port `tasks/00_check_environment.yml`, `files/target_disk_usage.sh`, `require_live_cd` and the four tag groups in `vars/main.yml`/`tasks/main.yml`. Adapt the root checks: `/` is a btrfs subvolume of the root partition (`findmnt` SOURCE `/dev/...[/@]`), not a ZFS dataset.
 - [ ] **Unencrypted swap fstab entries are never written** (`tasks/15_config_swap.yml` lines 19, 92): `echo ... >> /etc/fstab` via `ansible.builtin.command`. Port the `12_6-config_swap.yml` rewrite (`825753f`): `ansible.posix.mount` (path `none`, fstype `swap`), `community.general.crypttab` for `crypt_swap` (the current `echo >> /etc/crypttab` duplicates entries on reruns), drop `apt install` via `command`, `swap_device`/`swap_dev_name` vars.
 - [ ] **Single-disk unencrypted LVM** (`tasks/22_config_LVM.yml` line 15): `pvs: "{{ disk_by_id }}-part..."` renders a list. Use `disk_by_id[0]` / an `lvm_device` var.
 - [ ] **`no_log` set as a fact** (`tasks/01_basic_checks.yml` line 148): `no_log` is inside the `set_fact` args with a broken Jinja string. Move it to task level.

@@ -7,6 +7,13 @@ no_log_secrets: true
 # Output additional debug messages
 debug: false
 
+# The install steps (up to reboot_remote) only run on a system booted from a
+# Debian Live CD ("boot=live" on the kernel command line). Set to false to
+# install from another system, e.g. a rescue system. Independent of this, the
+# install steps refuse to run if a target disk holds a filesystem mounted
+# outside the install mount point (e.g. the running system's root).
+require_live_cd: true
+
 ###############################################################################
 # User Settings
 ###############################################################################

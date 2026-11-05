@@ -226,6 +226,16 @@ This temporary root password is only used during the build process. It is expire
 default_root_password: "change!me"
 ```
 
+#### Installer System Check
+
+The install steps (up to `reboot_remote`) only run on a system booted from a Debian Live CD, recognized by `boot=live` on the kernel command line. To install from another system, e.g. a rescue system, set `require_live_cd` to `false`. Note that the role still expects a Debian system with `apt` and the headers of the running kernel available.
+
+```yml
+require_live_cd: true
+```
+
+Independent of this setting, the install steps refuse to run if one of the target disks holds a filesystem mounted outside the install mount point (`/mnt`), for example the root filesystem of the running system or the live medium. See [Alternative Step by Step Installation](#alternative-step-by-step-installation) for the checks of the other steps.
+
 ### Additional Settings to Review
 
 * Review [Computer Configuration Settings](docs/computer-config-settings.md) (boot menu, locale, network, packages)
@@ -386,6 +396,16 @@ This is the list and order of execution for all tags defined for this role:
 Helper tasks, basic sanity checks and mandatory tasks are already marked as `always` and will always be processed to setup the base ansible working environment reading configuration files, setting variables, etc... nothing special you need to do.
 
 NOTE: The steps `config_system` to `first_boot_prep` run inside the chroot (via SSH port 8922), they need the live CD environment prepared by the previous steps. The steps from `localization` on run on the installed system after the first reboot.
+
+Each group of steps starts with a check that stops the run unless the target is where these steps belong, so a step tag given for the wrong system fails before anything is changed:
+
+| Steps | Must run on | Checked |
+|-------|-------------|---------|
+| `install-zfs-packages` to `config_system`, `unmount_chroot`, `reboot_remote` | Live CD | `boot=live` on the kernel command line (see `require_live_cd`), not in a chroot, no target disk in use outside `/mnt` |
+| `config_system` to `first_boot_prep` | chroot of the new system | the Live CD checks, the root dataset mounted at `/mnt`, port 8922 lands in a chroot of it on the same running kernel |
+| `localization` to `restart_remote_final` | Installed system | booted from the root dataset, not in a chroot |
+
+For example, `--tags clear_partition_tables_from_devices` against the installed system fails at the check instead of wiping its disks. The checks are tagged `always`, so `--skip-tags always` would skip them.
 
 ### Grouping Tags
 

@@ -5,12 +5,12 @@
 ####### Nothing Below Here Needs to be Edited ############
 ###############################################################################
 
-# Tags that activate the role (see tasks/main.yml). "bootstrap" runs everything,
-# the others run single steps. Keep in sync with the tags used in tasks/.
-zfs_on_root_tags:
-  - bootstrap
-  - confirm_defaults
-  - apply_apt_proxy
+# Step tags per group of task files (see tasks/main.yml). Each group starts
+# with an environment check (00_check_environment.yml) that runs when
+# "bootstrap" or one of the group's tags is requested. Keep in sync with the
+# tags used in tasks/.
+# Live CD: install packages, partition, create pool and datasets, debootstrap
+zfs_on_root_live_tags:
   - install-zfs-packages
   - clear_partition_tables_from_devices
   - create_partitions
@@ -18,6 +18,9 @@ zfs_on_root_tags:
   - create_pools
   - create_filesystems
   - create_datasets
+  - config_system
+# chroot (port 8922): configure the new system
+zfs_on_root_chroot_tags:
   - config_system
   - install_zfs
   - config_boot_fs
@@ -27,8 +30,12 @@ zfs_on_root_tags:
   - config_swap
   - system_tweaks
   - first_boot_prep
+# Live CD: unmount the chroot, export the pool, reboot into the new system
+zfs_on_root_teardown_tags:
   - unmount_chroot
   - reboot_remote
+# Installed system: finalize
+zfs_on_root_installed_tags:
   - localization
   - install_dropbear
   - config_lvm
@@ -36,6 +43,11 @@ zfs_on_root_tags:
   - disable_ipv6
   - update_sshd_settings
   - restart_remote_final
+
+# Tags that activate the role. "bootstrap" runs everything, the others run
+# single steps.
+zfs_on_root_tags: "{{ ['bootstrap', 'confirm_defaults', 'apply_apt_proxy'] + zfs_on_root_live_tags
+  + zfs_on_root_chroot_tags + zfs_on_root_teardown_tags + zfs_on_root_installed_tags }}"
 
 # Debian release to install (debootstrap suite and apt sources)
 distro_release: "trixie"

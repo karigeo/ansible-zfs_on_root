@@ -43,18 +43,30 @@ Real verification needs a VM booted from the Debian Live ISO. `tests/vm/` runs t
 
 ### Tag gating (`tasks/main.yml`)
 
-The includes are tagged `always` and gated with `when: ansible_run_tags | intersect(zfs_on_root_tags) | length > 0`. Included tasks get the `bootstrap` tag via `apply`. Result: without `--tags bootstrap` or a step tag the role is inert (safe in a site playbook), `--tags <step>` works and `--skip-tags` works per task. **When adding a new tag to a task file, add it to `zfs_on_root_tags` in `vars/main.yml`**, otherwise the role is not activated by it.
+The includes are tagged `always` and gated on `ansible_run_tags`. Included tasks get the `bootstrap` tag via `apply`. Result: without `--tags bootstrap` or a step tag the role is inert (safe in a site playbook), `--tags <step>` works and `--skip-tags` works per task.
+
+The task files form four groups (live CD 03–09_0, chroot 09_1–13, teardown 15–16, installed 17–20), each with its own tag list in `vars/main.yml` (`zfs_on_root_live_tags`, `..._chroot_tags`, `..._teardown_tags`, `..._installed_tags`; `zfs_on_root_tags` is built from them). A group and its environment check (`00_check_environment.yml`) run when `bootstrap` or one of the group's tags is requested; `01_*` and `02` run for any role tag. **When adding a new tag to a task file, add it to the list of its group**, otherwise neither the group nor its check is activated by it.
+
+### Environment checks (`00_check_environment.yml`)
+
+Each group starts with a check that stops the run unless the target is where the group belongs. The SSH port is transport only, not the safety mechanism.
+
+- `live`: `boot=live` in `/proc/cmdline` (skipped with `require_live_cd: false`), not in a chroot (`stat /` equals `stat /proc/1/root/`), and `files/target_disk_usage.sh` finds no target disk behind a mount outside `/mnt` (ZFS via `zpool list -v -P`, block devices via `lsblk -s`). The disk check cannot be turned off.
+- `chroot`: the live checks on port 22, `root_pool_dataset_path` mounted at `/mnt`, then on port 8922: in a chroot, `/` is `root_pool_dataset_path`, same `boot_id` as on port 22.
+- `installed`: `/` is `root_pool_dataset_path`, not in a chroot.
+
+The checks read fresh state; don't use `ansible_facts` there (gathered once at play start: stale after the reboot, and the live CD's inside the chroot). When testing them on the VM, close the SSH control masters first (`ssh -O exit`): ControlPersist reuses an old 8922 session even after sshd was reconfigured.
 
 ### Three phases
 
 1. **Live CD** (`01`–`09_0`, ansible_port 22): checks/prompts, sshd on the live CD also listens on 8922 with `ChrootDirectory /mnt` (`03`), wipe disks, partition, LUKS, `zpool create -R /mnt`, datasets, debootstrap, bind mounts, `ansible` user in the chroot (same UID and SSH key as on the live CD).
 2. **chroot** (`09_1`–`13`, `ansible_port: 8922` set on the include): Ansible connects to the live system's sshd on port 8922 and lands directly in the chroot. Tasks use normal paths (`/etc/...`), not `/mnt/...`. Kernel/ZFS, ESP, rEFInd, syslinux, ZBM, swap, final initramfs.
-3. **Installed system** (`15`–`20`, port 22): unmount/export, reboot into the new system, localization, dropbear (ZBM image), LVM, final setup, final reboot.
+3. **Teardown and installed system** (`15`–`20`, port 22): unmount/export and reboot (`15`–`16`, still the live CD), then on the new system localization, dropbear (ZBM image), LVM, final setup, final reboot.
 
 ### Files
 
-- `defaults/main.yml`: user-facing settings (passwords, locale, network `ipv4.interfaces`/`ipv4.bridges`, swap, `disk_encryption_type`, pool/partition sizes, `set_root_pool_type`, sshd, dropbear).
-- `vars/main.yml`: internal constants and derived values (partition numbers/flags, `root_pool_devices`, `luks_root_mapper_names`, `swap_device`, `lvm_device`, pool/dataset options, pinned versions of ZBM/zbm-luks-unlock/dracut-crypt-ssh, `zfs_on_root_tags`). Many are lazy expressions on `disk_by_id`, which is built in `01_basic_checks.yml`.
+- `defaults/main.yml`: user-facing settings (`require_live_cd`, passwords, locale, network `ipv4.interfaces`/`ipv4.bridges`, swap, `disk_encryption_type`, pool/partition sizes, `set_root_pool_type`, sshd, dropbear).
+- `vars/main.yml`: internal constants and derived values (partition numbers/flags, `root_pool_devices`, `luks_root_mapper_names`, `swap_device`, `lvm_device`, pool/dataset options, pinned versions of ZBM/zbm-luks-unlock/dracut-crypt-ssh, the tag lists per group). Many are lazy expressions on `disk_by_id`, which is built in `01_basic_checks.yml`.
 - `secrets/main.yml`: loaded first via `include_vars` (gitignored).
 - `docs/`: user documentation per topic; keep it in sync with `defaults/main.yml`.
 
