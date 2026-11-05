@@ -36,7 +36,7 @@
           #########################################################################
           This playbook requires that you define one or more disk devices to use.
           Each disk device specified will have its partitions erased and rebuilt
-          using ZFS on Root recommendations based on Ubuntu 20.04.
+          for the Debian 13 ZFS on Root installation.
 
           NOTE: You can specify devices to use as an ansible parameter using the
                 extra-vars parameter, for example:
