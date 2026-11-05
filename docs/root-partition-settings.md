@@ -13,6 +13,8 @@ Every disk gets the same layout:
 | 3 | ZFS root pool | BF00, 8309 (LUKS) |
 | 4 | LVM (optional, `create_lvm_partition`) | 8e00, 8309 (LUKS), FD00 (mdadm) on 3+ disks |
 
+With multiple disks the firmware sees each ESP member as a plain FAT32 partition. Anything that writes to the ESP outside Linux (firmware, rEFInd) changes only that member and the mirror diverges silently. The role therefore sets `use_nvram true` in `refind.conf` (rEFInd keeps its variables in NVRAM); don't take rEFInd screenshots (F10) or install tools from the firmware side onto the ESP.
+
 ## Define the ZFS Pool Name
 
 ```yaml
