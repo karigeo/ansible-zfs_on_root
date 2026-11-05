@@ -104,7 +104,9 @@
         name: "{{ luks_root_mapper_names[ansible_loop.index0] }}"
         backing_device: "UUID={{ root_partition_uuids[ansible_loop.index0] }}"
         password: "/etc/cryptsetup-keys.d/{{ root_pool_name }}.key"
-        opts: luks,discard,initramfs
+        # nofail: with a missing mirror/raidz member the boot does not wait for it
+        # (the pool is imported in the initramfs already)
+        opts: luks,discard,initramfs,nofail
         state: present
       loop: "{{ disk_by_id }}"
       loop_control:
