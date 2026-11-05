@@ -36,7 +36,7 @@ apply_dropbear_settings:
   public_key_for_dropbear: ["ssh-ed25519 ABCDEFG user@machine"]
 ```
 
-* `remoteaccess_device` is matched by its MAC address, so the name of the device inside ZFSBootMenu does not matter.
+* `remoteaccess_device` defaults to the first entry of `ipv4.interfaces`. It is matched by its MAC address, so the name of the device inside ZFSBootMenu does not matter.
 * With `remoteaccess_ip_config: "static"` set `remoteaccess_ip`, `remoteaccess_netmask` and `remoteaccess_gateway`.
 * The network configuration is written to `/etc/cmdline.d/dracut-network.conf`. `rd.neednet=1` is not set, so the system still boots without network.
 

@@ -19,7 +19,7 @@ disk_encryption_type: luks
 | `native` | ZFS native encryption (aes-256-gcm), one encryption root: the pool | plain dm-crypt, random key per boot | LUKS container with keyfile |
 | `none`   | unencrypted                                                    | unencrypted                        | unencrypted                  |
 
-The same passphrase is used for the root pool (LUKS or native) and the LUKS container of the LVM partition.
+The same passphrase is used for the root pool (LUKS or native) and the LUKS container of the LVM partition. Changing it later means changing it in every place (`cryptsetup luksChangeKey` for each LUKS container, see below for native).
 
 ### LUKS
 
@@ -35,7 +35,7 @@ The same passphrase is used for the root pool (LUKS or native) and the LUKS cont
   * The keyfile is embedded in the initramfs (initramfs-tools hook `zfs-native-key`, `UMASK=0077`), so the booted system unlocks the pool without a second prompt.
 * Consequences of one pool-level encryption root:
   * Unencrypted datasets cannot be created in this pool. ZFS does not allow unencrypted children of an encrypted dataset. Raw received datasets (`zfs send -w`) keep their own encryption root.
-  * Encryption cannot be turned off later; the passphrase can be changed with `zfs change-key` (update the keyfile and regenerate the initramfs afterwards).
+  * Encryption cannot be turned off later. To change the passphrase, write the new one to the keyfile, run `zfs change-key <root_pool_name>` (it reads the new key from `keylocation`, the keyfile) and regenerate the initramfs (`update-initramfs -u -k all`).
 * ZFS native encryption encrypts data and _most_ metadata. It does not encrypt dataset names, snapshot names or properties.
 * Proxmox VE has limitations with natively encrypted datasets (e.g. storage replication and migration of guests). Prefer `luks` if you need these features.
 

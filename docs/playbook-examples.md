@@ -4,25 +4,11 @@
 
 The following examples show overriding values from the command-line. Typically it will be easier to define these in the inventory or host_vars instead.
 
-The `playbook.yml` referenced in the examples below is a simple yaml file used to call the role, which can look like this:
-
-```yaml
----
-- name: ZFS on Root Debian Installation
-  hosts: zfs_on_root_install_group
-  become: true
-  gather_facts: true
-
-  roles:
-    - role: zfs_on_root
-      tags: [never, bootstrap]
-```
-
-The role only runs when `--tags bootstrap` (everything) or one of its step tags is given, see [Alternative Step by Step Installation](../README.md#alternative-step-by-step-installation). The `[never, bootstrap]` tags on the role are optional, they make the intent visible in a site playbook.
+The examples use the `playbook.yml` from the [README](../README.md#fire-up-the-ansible-playbook). The role only runs when `--tags bootstrap` (everything) or one of its step tags is given, see [Alternative Step by Step Installation](../README.md#alternative-step-by-step-installation).
 
 ---
 
-NOTE: The role configures the live CD's `sshd` to listen on port 22 and on port 8922 (chrooted into the new system, used for the chroot phase). Don't set `ansible_port` with `--extra-vars`, extra vars would override the chroot port.
+NOTE: The role configures the live CD's `sshd` to listen on port 22 and on port 8922 (chrooted into the new system, used for the chroot phase). Don't set `ansible_port` with `--extra-vars`: extra vars would override the chroot port.
 
 To provide the encryption passphrase (LUKS or native, see `disk_encryption_type`):
 
@@ -59,6 +45,8 @@ To do multiple of these at the same time:
 ansible-playbook -i inventory.yml ./playbook.yml --tags bootstrap --extra-vars='{disk_devices: [sda, sdb], host_name: testlinux, passphrase: "mySecr3tPa55"}' -l <remote_host_name>
 ```
 
-If the above is too complicated, no worries. The playbook will show you the detected defaults and let you just type values. It will also show you a summary screen of values for your reference and allow you to abort.
+Values that are not set (`disk_devices`, `host_name`, `passphrase`) are prompted for, with the detected defaults suggested. Before anything is changed, a summary screen of the settings is shown and you can abort (skip it with `--skip-tags confirm_defaults`).
+
+The passphrase can also be kept in the optional `secrets/main.yml` of the role (not tracked by git) instead of the command line.
 
 [Back to README.md](../README.md)

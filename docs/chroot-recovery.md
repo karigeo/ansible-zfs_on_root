@@ -8,7 +8,7 @@ This will mount all pools and file systems under the `/mnt` directory. The examp
 
 1. Boot the Debian Live CD:
     * Select option <button name="button">Live</button>.
-    * Open a terminal within the Live CD environment - press <kbd>Ctrl</kbd> <kbd>Alt</kbd>-<kbd>T</kbd>.
+    * Standard image: use the console (user `user`, password `live`). Desktop image: open a terminal.
 
 2. Become Root
 
@@ -16,11 +16,12 @@ This will mount all pools and file systems under the `/mnt` directory. The examp
     sudo -i
     ```
 
-3. Install packages to support the chroot environment (`contrib` must be enabled in the apt sources for ZFS)
+3. Install ZFS and the tools needed for the chroot environment. ZFS is in `contrib`: add `contrib` to the components of the live CD's apt sources (`/etc/apt/sources.list` or `/etc/apt/sources.list.d/*.sources`) first. The headers must match the running live CD kernel, which is usually older than `linux-headers-amd64` in the archive.
 
     ```shell
     apt-get update
-    apt-get install --yes linux-headers-amd64 zfsutils-linux mdadm cryptsetup
+    apt-get install --yes linux-headers-$(uname -r) zfs-dkms zfsutils-linux mdadm cryptsetup
+    modprobe zfs
     ```
 
 4. LUKS only: open the LUKS containers of the root partitions (partition `3` of every disk)
@@ -29,7 +30,7 @@ This will mount all pools and file systems under the `/mnt` directory. The examp
     cryptsetup open /dev/disk/by-id/<disk>-part3 crypt_<disk>_root
     ```
 
-    * Repeat for every disk. The mapper names do not matter for ZFS, it finds the pool on any of them.
+    * Repeat for every disk (`<disk>` is the by-id name). The mapper names do not matter for ZFS, it finds the pool on any of them.
 
 5. Export all pools (in case anything was automatically imported)
 
@@ -55,6 +56,7 @@ This will mount all pools and file systems under the `/mnt` directory. The examp
     mount /dev/disk/by-id/<disk>-part1 /mnt/boot/efi
 
     # multiple disks: assemble the mdadm mirror of all ESP partitions first
+    # (never mount a single member, writes would make the mirror diverge)
     mdadm --assemble /dev/md/BOOT_EFI /dev/disk/by-id/<disk1>-part1 /dev/disk/by-id/<disk2>-part1
     mount /dev/md/BOOT_EFI /mnt/boot/efi
     ```
