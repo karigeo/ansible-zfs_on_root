@@ -109,11 +109,6 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
-    - name: Disable ansible user password
-      ansible.builtin.user:
-        name: ansible
-        password: '*'
-
     # [ Switch Log Compression to ZFS Compression ]############################
     - name: Locate Existing Log Files
       ansible.builtin.find:
