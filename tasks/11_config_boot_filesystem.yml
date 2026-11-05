@@ -42,7 +42,6 @@
           {{ disk_by_id | product(['-part' + boot_partition]) | map('join') | join(' ') }}
         creates: "{{ boot_dev_name }}"
       register: cmd_output
-      changed_when: cmd_output.rc == 0
 
     # The ARRAY lines for /etc/mdadm/mdadm.conf are written at the end of the
     # chroot phase (13_first_boot_prep.yml), once all arrays exist.

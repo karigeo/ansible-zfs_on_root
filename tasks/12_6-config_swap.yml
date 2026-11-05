@@ -21,7 +21,6 @@
         cmd: "mdadm --zero-superblock --force {{ item }}-part{{ swap_partition }}"
         creates: "{{ swap_dev_name }}"
       register: cmd_output
-      changed_when: cmd_output.rc == 0
       failed_when: false
       loop: "{{ disk_by_id }}"
 
@@ -36,7 +35,6 @@
           {{ disk_by_id | product(['-part' + swap_partition]) | map('join') | join(' ') }}
         creates: "{{ swap_dev_name }}"
       register: cmd_output
-      changed_when: cmd_output.rc == 0
 
 ###############################################################################
 # [ Unencrypted Swap ]#########################################################

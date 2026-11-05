@@ -27,7 +27,6 @@
           {{ disk_by_id | product(['-part' + lvm_partition]) | map('join') | join(' ') }}
         creates: "{{ lvm_dev_name }}"
       register: cmd_output
-      changed_when: cmd_output.rc == 0
 
     - name: Scan assembled mdadm arrays
       ansible.builtin.command:
