@@ -3,13 +3,13 @@
 
 - name: Restart timesyncd under Virtualbox Block
   when:
-    - ansible_os_family == "Debian"
+    - ansible_facts['os_family'] == "Debian"
     - virtual_box|default(false)|bool
   tags:
     - install-zfs-packages
     - always
   block:
-    # ZFS package installs have failed due to "not yet valid" message. This unusually happens
+    # ZFS package installs have failed due to "not yet valid" message. This usually happens
     # when time is not set correctly on the new system.  This happened often when virtualbox
     # snapshot images were used.  Restarting timesyncd service forces time to be updated.
     - name: Restarting timesync service under Virtualbox
@@ -21,35 +21,24 @@
       ansible.builtin.pause:
         seconds: 10
 
-# ###[ Disable Auto-mounting ]###################################################
-- name: Stop reused disks from being auto mounted
-  tags:
-    - install-zfs-packages
-  block:
-    - name: Stop reused disks from being auto mounted
-      ansible.builtin.command: "gsettings set org.gnome.desktop.media-handling automount false"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      ignore_errors: true
-
 - name: Setup SSH Server to allow chroot Connection
   tags:
     - install-zfs-packages
   block:
+    # Phase 2 of the role connects on port 8922 and lands directly in the chroot
     - name: Configure sshd to allow connecting directly inside the chroot
       notify: Restart sshd
       ansible.builtin.blockinfile:
-       block: |
-         Port 22
-         Port 8922
-         Match LocalPort 8922
-           ChrootDirectory /mnt
-       path: /etc/ssh/sshd_config
-       validate: /usr/sbin/sshd -T -C lport=22 -f %s
+        block: |
+          Port 22
+          Port 8922
+          Match LocalPort 8922
+            ChrootDirectory {{ live_cd_mountpoint }}
+        path: /etc/ssh/sshd_config
+        validate: /usr/sbin/sshd -T -C lport=22 -f %s
 
     - name: Force handlers to run
       ansible.builtin.meta: flush_handlers
-  
 
 # ###[ Change APT Sources on Live CD Environment ]##############################
 - name: Update apt sources debian.sources
@@ -69,31 +58,37 @@
         dest: "/etc/apt/sources.list.d/debian.sources"
         owner: root
         group: root
-        mode: "0o644"
+        mode: "0644"
 
-# ##[ Install Packages Need to get Started ]####################################
-- name: Install Packages Need to get Started
+# ##[ Install Packages needed to get started ]##################################
+- name: Install Packages needed to get started
   when:
-    - ansible_os_family == "Debian"
-    - ansible_distribution == "Debian"
+    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Debian"
   tags:
     - install-zfs-packages
   block:
+    # Headers of the running kernel, not linux-headers-amd64: the live CD kernel is
+    # usually older than the archive, and DKMS only builds for kernels with headers.
     - name: Install supporting packages (assumes Live CD Environment)
       ansible.builtin.apt:
-        name: ['debootstrap', 'gdisk', 'linux-headers-amd64', 'dosfstools', 'mdadm', 'cryptsetup', 'lshw']
+        name: ['debootstrap', 'gdisk', "linux-headers-{{ ansible_facts['kernel'] }}", 'dosfstools', 'mdadm', 'cryptsetup', 'lshw']
         state: present
         update_cache: true
     - name: Install ZFS packages (assumes Live CD Environment)
       ansible.builtin.apt:
-        name: ['zfsutils-linux']
+        name: ['zfs-dkms', 'zfsutils-linux']
         state: present
         update_cache: true
+    - name: Load the ZFS kernel module
+      community.general.modprobe:
+        name: zfs
+        state: present
 
 - name: Generate ZFS hostid
   when:
-    - ansible_os_family == "Debian"
-    - ansible_distribution == "Debian"
+    - ansible_facts['os_family'] == "Debian"
+    - ansible_facts['distribution'] == "Debian"
   tags:
     - install-zfs-packages
   block:
@@ -102,6 +97,5 @@
         cmd: zgenhostid -f
       register: cmd_output
       changed_when: cmd_output.rc == 0
-  
 
 ###############################################################################

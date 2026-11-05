@@ -2,7 +2,7 @@
 # [ Create Datasets for Filesystem ]###########################################
 - name: Create Datasets for Filesystem Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_datasets
   block:
@@ -37,4 +37,3 @@
       loop_control:
         loop_var: mount_path
         label: "{{ mount_path.path }}"
-

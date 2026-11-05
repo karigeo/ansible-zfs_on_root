@@ -4,7 +4,7 @@
 
 ## Emergency chroot Recovery
 
-This will mount all pools and file systems under `/mnt` directory.
+This will mount all pools and file systems under the `/mnt` directory. The examples use the default names `rpool` (`root_pool_name`) and `pve-1` (`root_dataset_name`).
 
 1. Boot the Debian Live CD:
     * Select option <button name="button">Live</button>.
@@ -16,43 +16,50 @@ This will mount all pools and file systems under `/mnt` directory.
     sudo -i
     ```
 
-3. Install packages to support chroot environment
+3. Install packages to support the chroot environment (`contrib` must be enabled in the apt sources for ZFS)
 
     ```shell
-    apt-get install mdadm
+    apt-get update
+    apt-get install --yes linux-headers-amd64 zfsutils-linux mdadm cryptsetup
     ```
 
-4. Export all pools (incase anything was automatically imported)
+4. LUKS only: open the LUKS containers of the root partitions (partition `3` of every disk)
+
+    ```shell
+    cryptsetup open /dev/disk/by-id/<disk>-part3 crypt_<disk>_root
+    ```
+
+    * Repeat for every disk. The mapper names do not matter for ZFS, it finds the pool on any of them.
+
+5. Export all pools (in case anything was automatically imported)
 
     ```shell
     zpool export -a
     ```
 
-5. Import ZFS pool(s), load encryption keys and mount to `/mnt` directory
+6. Import the ZFS pool, load the encryption key (native encryption only) and mount to `/mnt`
 
     ```shell
-    zpool import -f -N -R /mnt {root_pool_name}
-    zfs load-key -a
+    zpool import -f -N -R /mnt rpool
+    # native encryption only: the keyfile is inside the pool, so prompt for the passphrase
+    zfs load-key -L prompt rpool
 
-    zfs mount {root_pool_name}/ROOT/ubuntu
-    zfs mount {root_pool_name}/ROOT/home/root
-
+    zfs mount rpool/ROOT/pve-1
     zfs mount -a
     ```
 
-    * The `{root_pool_name}` is unique to your system.  By default, this Ansible process names the pool after the hostname.  This is the equivalent of `rpool` in previous ZFS on Root methods.
-
-6. Create mdadm array of boot partitions and mount to `/mnt/boot/efi` directory
+7. Mount the boot partition to `/mnt/boot/efi`
 
     ```shell
-    mdadm --assemble /dev/md127  /dev/sda1 /dev/nvme0n1p1
-    mount /dev/md127 /mnt/boot/efi
+    # single disk
+    mount /dev/disk/by-id/<disk>-part1 /mnt/boot/efi
+
+    # multiple disks: assemble the mdadm mirror of all ESP partitions first
+    mdadm --assemble /dev/md/BOOT_EFI /dev/disk/by-id/<disk1>-part1 /dev/disk/by-id/<disk2>-part1
+    mount /dev/md/BOOT_EFI /mnt/boot/efi
     ```
 
-    * Above assumes just 2 devices.  Each device uses partition `1` on that device (standard partition for booting).
-    * You need to adjust the number of devices and device names such as`/dev/sda1` (SATA SSD) and `/dev/nvme0n1p1` (NVMe SSD) to match the names of whatever your system uses.
-
-7. Mount Live CD paths to Build chroot Environment
+8. Mount Live CD paths to build the chroot environment
 
     ```shell
     mount -t proc /proc /mnt/proc
@@ -61,28 +68,28 @@ This will mount all pools and file systems under `/mnt` directory.
     mount -t devpts pts /mnt/dev/pts
     ```
 
-8. Enter the chroot environment
+9. Enter the chroot environment
 
     ```shell
     chroot /mnt bash
     ```
 
-    * You are now within the chroot environment and can issue commands as if you have booted from it.  You can troubleshoot, view, logs, apply patches, work on ZFS items, whatever is needed to get your system bootable again.
+    * You are now within the chroot environment and can issue commands as if you have booted from it. You can troubleshoot, view logs, apply patches, work on ZFS items, whatever is needed to get your system bootable again.
 
-    * If you needed to regenerate your boot initramfs:
+    * If you need to regenerate the initramfs of the system and the ZFSBootMenu image:
 
       ```shell
-      dracut -v -f --regenerate-all
-      generate-zbm
+      update-initramfs -u -k all
+      generate-zbm --debug
       ```
 
-9. Exit chroot when ready (return to Live CD environment)
+10. Exit chroot when ready (return to Live CD environment)
 
     ```shell
     exit
     ```
 
-10. Unmount everything and export all ZFS pools
+11. Unmount everything and export all ZFS pools
 
     ```shell
     umount /mnt/boot/efi
@@ -92,6 +99,6 @@ This will mount all pools and file systems under `/mnt` directory.
     zpool export -a
     ```
 
-It is now safe to exit Debian Live CD and reboot system, hopefully you fixed your issues and can boot. If not repeat the steps above and keep on Googling that problem. :)
+It is now safe to exit the Debian Live CD and reboot the system. If you could not fix your issue, repeat the steps above.
 
 [Back to README.md](../README.md)

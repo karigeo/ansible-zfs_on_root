@@ -1,0 +1,10 @@
+#!/bin/bash
+# Case 8 helper: run case 8 with the given options and summarize what ran.
+# Usage: tagrun <name> [ansible-playbook options...]
+. "$(dirname "$0")/common.sh"
+N=$1; shift; L=$LOGS/case8-$N.log
+"$(dirname "$0")/play" 8 "$@" > "$L" 2>&1
+echo "== $N ($*): exit $?"
+grep -c '^TASK' "$L" | sed 's/^/TASK headers: /'
+sed -n '/PLAY RECAP/,$p' "$L" | grep -v '^PLAY RECAP' | grep .
+grep -B1 -E '^changed' "$L" | grep '^TASK'

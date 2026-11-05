@@ -2,7 +2,7 @@
 # [ Create Filesystem Containers ]#############################################
 - name: Create Filesystem Containers Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_filesystems
   block:
@@ -12,25 +12,12 @@
       when:
         debug | default(false)
 
-    - name: Create Root Filesystem Dataset Container without Encryption
+    # With native encryption the container inherits encryption from the pool
+    - name: Create Root Filesystem Dataset Container
       ansible.builtin.command:
-        "zfs create {{ root_pool_container_options | join(' ') }}"
+        cmd: "zfs create {{ root_pool_container_options | join(' ') }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      when:
-        - not root_pool_encryption|default(false)
-
-    - name: Create Root Filesystem Dataset Container with Encryption
-      ansible.builtin.expect:
-        command:
-          "zfs create {{ root_pool_container_options | join(' ') }}"
-        responses:
-          passphrase: "{{ passphrase }}"
-          again: "{{ passphrase }}"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      when:
-        - root_pool_encryption|default(false)
 
     - name: Debug Create Root Filesystem
       ansible.builtin.debug:

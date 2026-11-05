@@ -1,137 +1,102 @@
 ---
-# [ Single Disk Unencrypted Swap Configuration ]###############################
-- name: Single Disk Unencrypted Swap Block
-  when:
-    - ansible_nodename != "localhost"
-    - enable_swap_partitions|default(true)|bool
-    - disk_encryption_type == "none"
-    - disk_by_id | length == 1
-  tags:
-    - config_swap
-  block:
-    - name: Run commands to Create Swap Filesystem for Single Disk Unencrypted
-      ansible.builtin.command:
-        cmd: "{{ item }}'"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      with_items:
-        - "mkswap -f {{ disk_by_id[0] }}-part{{ swap_partition }}"
-        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value {{ disk_by_id[0] }}-part{{ swap_partition }}) none swap discard 0 0 >> /etc/fstab"
-
-    - name: Run command to enable Unencrypted swap
-      ansible.builtin.command:
-        cmd: "swapon -a"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+# [ Swap Configuration ]#######################################################
+# Single device: swap lives directly on the swap partition.
+# Multiple devices: the swap partitions are joined into an mdadm array
+# (mirror for 2 devices, raid10 for 3 or more devices).
+# With encryption ("luks" or "native") swap gets a new random key on every
+# boot (plain dm-crypt configured in /etc/crypttab).
 
 ###############################################################################
-# [ Create Multi Disk Swap Mirror or RAID ]####################################
-- name: Create Multi Disk Swap Mirror or RAID Block
+# [ Create Multi Disk Swap mdadm Array ]#######################################
+- name: Create Multi Disk Swap mdadm Array Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - enable_swap_partitions | default(true) | bool
     - disk_by_id | length | int > 1
   tags:
     - config_swap
   block:
-    - name: Run command to install mdadm for multi-disk swap
+    - name: Wipe mdadm superblock from swap partitions
       ansible.builtin.command:
-        cmd: "apt install --yes mdadm"
+        cmd: "mdadm --zero-superblock --force {{ item }}-part{{ swap_partition }}"
+        creates: "{{ swap_dev_name }}"
       register: cmd_output
-      changed_when: cmd_output.rc == 0
-      when:
-        - ansible_os_family == "Debian"
+      failed_when: false
+      loop: "{{ disk_by_id }}"
 
-    # if more than 1 device, and boot pool is a mirror then use a mirror
-    - name: See if mirror is to be used
-      ansible.builtin.set_fact:
-        mdadm_type: "mirror"
-      when:
-        - disk_by_id | length | int == 2
-
-    - name: See if raid5 should be used
-      ansible.builtin.set_fact:
-        mdadm_type: "raid5"
-      when:
-        - disk_by_id | length | int > 2
-
-    # Create a list of swap device partitions to use
-    - name: Create a list of swap device partitions to use
-      ansible.builtin.set_fact:
-        mdadm_swap_device_list: "{{ mdadm_swap_device_list | default('') }} {{ item }}-part{{ swap_partition }}"
-      loop:
-        "{{ disk_by_id }}"
-
-    # The "-R" - is needed to suppress the "Continue creating array?" prompt
-    - name: Run command to create mdadm device for multi-disk swap
-      ansible.builtin.command: >
-        mdadm --create --verbose /dev/md/swap -R --metadata=1.2
-        --level={{ mdadm_type }} --raid-devices={{ disk_by_id | length | int }} {{ mdadm_swap_device_list }}
-        --homehost={{ host_name }}
+    # The "-R" is needed to suppress the "Continue creating array?" prompt
+    - name: Create mdadm array for multi-disk swap
+      ansible.builtin.command:
+        cmd: >-
+          mdadm --create {{ swap_dev_name }} --verbose -R --metadata=1.2
+          --level={{ (disk_by_id | length | int == 2) | ternary('mirror', 'raid10') }}
+          --raid-devices={{ disk_by_id | length | int }} --homehost={{ host_name }}
+          --name=swap --assume-clean
+          {{ disk_by_id | product(['-part' + swap_partition]) | map('join') | join(' ') }}
+        creates: "{{ swap_dev_name }}"
       register: cmd_output
-      changed_when: cmd_output.rc == 0
 
 ###############################################################################
-# [ Configure Multi Disk Unencrypted Swap ]####################################
-- name: Multi Disk Unencrypted Swap Block
+# [ Unencrypted Swap ]#########################################################
+- name: Unencrypted Swap Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - enable_swap_partitions | default(true) | bool
     - disk_encryption_type == "none"
-    - disk_by_id | length | int > 1
   tags:
     - config_swap
   block:
-    - name: Run command to create swap filesystem for multi-disk mdadm device
+    - name: Check for an existing swap signature
       ansible.builtin.command:
-        cmd: "{{ item }}"
+        cmd: "blkid -s TYPE -o value {{ swap_device }}"
+      register: swap_type
+      changed_when: false
+      failed_when: false
+
+    - name: Create swap filesystem
+      ansible.builtin.command:
+        cmd: "mkswap -f {{ swap_device }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      with_items:
-        - "mkswap -f /dev/md/swap"
-        - "echo /dev/disk/by-uuid/$(blkid -s UUID -o value /dev/md/swap) none swap discard 0 0 >> /etc/fstab"
+      when: swap_type.stdout != "swap"
+
+    - name: Get swap UUID
+      ansible.builtin.command:
+        cmd: "blkid -s UUID -o value {{ swap_device }}"
+      register: swap_uuid
+      changed_when: false
+      failed_when: swap_uuid.stdout | length == 0
+
+    - name: Add swap to /etc/fstab
+      ansible.posix.mount:
+        path: none
+        src: "UUID={{ swap_uuid.stdout }}"
+        fstype: swap
+        opts: discard
+        state: present
 
 ###############################################################################
-# [ Single or Multi Disk Encrypted Swap Configuration ]########################
-- name: Multi Disk Encrypted Swap Block
+# [ Encrypted Swap ]###########################################################
+- name: Encrypted Swap Block
   when:
-    - ansible_nodename != "localhost"
-    - enable_swap_partitions|default(true)|bool
-    - disk_encryption_type == "luks" or disk_encryption_type == "native"
+    - ansible_facts['nodename'] != "localhost"
+    - enable_swap_partitions | default(true) | bool
+    - disk_encryption_type in ["luks", "native"]
   tags:
     - config_swap
   block:
-    - name: Run command to install cryptsetup on Debian based systems
-      ansible.builtin.command:
-        cmd: "apt install --yes cryptsetup"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    - name: Add encrypted swap device to /etc/crypttab
+      community.general.crypttab:
+        name: crypt_swap
+        backing_device: "{{ swap_device }}"
+        password: /dev/urandom
+        opts: swap,cipher=aes-xts-plain64:sha256,size=512
+        state: present
 
-      when:
-        - ansible_os_family == "Debian"
-
-    # Work for Encrypted Single Disk SWAP
-    - name: Run command to add single disk encrypted swap partitions to /etc/crypttab
-      ansible.builtin.shell:
-        cmd: "echo crypt_swap {{ disk_by_id[0] }}-part{{ swap_partition }} /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      when:
-        - disk_by_id | length | int == 1
-
-    # Work for Multi Disk Encrypted SWAP
-    - name: Run commands to add multi-disk encrypted swap partitions to /etc/crypttab
-      ansible.builtin.shell:
-        cmd: "echo crypt_swap /dev/md/swap /dev/urandom swap,cipher=aes-xts-plain64:sha256,size=512 >> /etc/crypttab"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      when:
-        - disk_by_id | length | int > 1
-
-    - name: Run command to add swap device map to /etc/fstab (Single or Multi Disk)
-      ansible.builtin.shell:
-        cmd: "echo /dev/mapper/crypt_swap none swap defaults 0 0 >> /etc/fstab"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-
-###############################################################################
+    - name: Add encrypted swap to /etc/fstab
+      ansible.posix.mount:
+        path: none
+        src: /dev/mapper/crypt_swap
+        fstype: swap
+        opts: defaults
+        state: present

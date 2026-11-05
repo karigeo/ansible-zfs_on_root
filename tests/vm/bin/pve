@@ -1,0 +1,17 @@
+#!/bin/bash
+# Proxmox API helper. Never prints the token.
+# Usage: pve GET|POST|PUT|DELETE <path relative to /api2/json> [key=value...]
+#        {node} and {vmid} in the path are replaced from pve.env.
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+set -a; . "$ZFS_TEST_DIR/pve.env"; set +a
+method=$1; path=$2; shift 2
+path=${path//\{node\}/$PVE_NODE}; path=${path//\{vmid\}/$PVE_VMID}
+args=(); [[ $method == GET ]] && args+=(-G)
+for a in "$@"; do args+=(--data-urlencode "$a"); done
+# Connect by the certificate name (PVE_CERT_NAME), pinned to the API address
+host=${PVE_URL#https://}; host=${host%%/*}; ip=${host%%:*}; port=${host##*:}
+name=${PVE_CERT_NAME:-$ip}
+exec curl -sS --fail-with-body --cacert "$ZFS_TEST_DIR/pve-root-ca.pem" --resolve "$name:$port:$ip" \
+  -H "Authorization: PVEAPIToken=${PVE_TOKEN_ID}=${PVE_TOKEN_SECRET}" \
+  -X "$method" "https://$name:$port/api2/json${path}" ${args[@]+"${args[@]}"}

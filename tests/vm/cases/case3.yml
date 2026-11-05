@@ -1,0 +1,4 @@
+# 1 disk, UEFI, no encryption, swap + LVM
+# Disk on virtio-blk without serial: covers the /dev/disk/by-path fallback
+disk_devices: [vda]
+disk_encryption_type: none

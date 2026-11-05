@@ -2,18 +2,27 @@
 # [ Install rEFInd Boot Manager ]##############################################
 - name: Install rEFInd Boot Manager Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - install_refind
   block:
+    # The role runs refind-install itself; the package postinst would install it a
+    # second time (and stack another ESP mount, see below)
+    - name: Don't let the refind package install itself to the ESP
+      ansible.builtin.debconf:
+        name: refind
+        question: refind/install_to_esp
+        vtype: boolean
+        value: "false"
+
     - name: Install rEFInd Boot Manager
       ansible.builtin.apt:
-        name: 
+        name:
           - refind
           - git
         state: present
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     - name: Make sure efivars are mounted
       ansible.posix.mount:
@@ -21,9 +30,11 @@
         src: efivarfs
         fstype: efivarfs
         state: ephemeral
+      when:
+        - uefi_mode
 
     - name: Create Directories for zfs-boot-menu and refind
-      ansible.builtin.file:
+      ansible.builtin.file:  # noqa: risky-file-permissions (FAT32 ESP, no unix modes)
         state: directory
         path: "{{ item }}"
         owner: root
@@ -34,15 +45,52 @@
 
     - name: Run command to install rEFInd Boot Manager
       ansible.builtin.command:
-        cmd: "{{ item }}"
+        cmd: "refind-install --yes"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      with_items:
-        - "refind-install --yes"
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
-    - name: Copy rEFInd template to /mnt/boot/efi/EFI/zfsbootmenu/refind_linux.conf
+    # refind-install always runs "mount /boot/efi", which stacks another mount on
+    # the already mounted ESP. mvrefind (legacy BIOS) then aborts with "doesn't seem
+    # to be on a VFAT filesystem", and the unmount phase has to unwind the stack.
+    - name: Remove ESP mounts stacked by refind-install
+      ansible.builtin.shell:
+        cmd: |
+          n=0
+          while [ "$(grep -c " {{ efi_boot_mountpoint }} " /proc/self/mountinfo)" -gt 1 ]; do
+            umount {{ efi_boot_mountpoint }}
+            n=$((n + 1))
+          done
+          echo "$n"
+      register: esp_unstack
+      changed_when: esp_unstack.stdout != "0"
+
+    # The ESP is an mdadm mirror on multi-disk installs. Add a UEFI boot entry
+    # for the ESP partition of every disk, so any remaining disk can boot.
+    - name: Get existing UEFI boot entries
+      ansible.builtin.command:
+        cmd: efibootmgr
+      register: efi_boot_entries
+      changed_when: false
+      when:
+        - uefi_mode
+        - disk_by_id | length | int > 1
+
+    - name: Create a rEFInd UEFI boot entry for every disk
+      ansible.builtin.command:
+        cmd: >-
+          efibootmgr --create --disk {{ item }} --part {{ boot_partition }}
+          --loader '\{{ refind_efi_pathname }}' --label 'rEFInd {{ item | basename }}'
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+      loop: "{{ disk_by_id }}"
+      when:
+        - uefi_mode
+        - disk_by_id | length | int > 1
+        - ("rEFInd " ~ (item | basename)) not in efi_boot_entries.stdout
+
+    - name: Copy rEFInd template to the ZFSBootMenu directory (refind_linux.conf)
       ansible.builtin.template:
         src: refind_linux.conf.j2
         dest: "{{ zfs_boot_menu_path }}/refind_linux.conf"
@@ -56,25 +104,25 @@
       when:
         - not uefi_mode
       ansible.builtin.command:
-        cmd: "{{ item }}"
+        cmd: "mvrefind {{ efi_boot_path }}/BOOT {{ refind_path }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      with_items:
-        - "mvrefind {{ efi_boot_path }}/BOOT {{ refind_path }}"
 
-    - name: Reduce rEFIND boot menu timeout from 20 seconds to new value
+    - name: Set rEFInd boot menu timeout
       ansible.builtin.replace:
         path: "{{ refind_path }}/refind.conf"
         regexp: '^timeout .*'
         replace: 'timeout {{ refind_boot_menu_timeout }}'
 
     - name: Create directory for rEFInd theme
-      ansible.builtin.file: 
+      ansible.builtin.file:  # noqa: risky-file-permissions (FAT32 ESP, no unix modes)
         state: directory
         path: "{{ refind_path }}/themes/{{ refind_theme_name }}/"
         owner: root
         group: root
-        
+      when:
+        - refind_theming | bool
+
     - name: Fetch rEFInd theme
       ansible.builtin.git:
         clone: true
@@ -82,6 +130,8 @@
         dest: "{{ refind_path }}/themes/{{ refind_theme_name }}"
         version: master
         force: true
+      when:
+        - refind_theming | bool
 
     - name: Config rEFInd to use theme
       ansible.builtin.lineinfile:
@@ -91,6 +141,8 @@
         owner: root
         group: root
         mode: '0644'
+      when:
+        - refind_theming | bool
 
     - name: Add custom menuentry for ZBM
       ansible.builtin.blockinfile:
@@ -98,13 +150,35 @@
           menuentry "ZFSBootMenu" {
               loader {{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}/vmlinuz-bootmenu
               initrd {{ zfs_boot_menu_path[ efi_boot_mountpoint | length :] }}/initramfs-bootmenu.img
-              icon {{ refind_path[ efi_boot_mountpoint | length :] }}/themes/refind-ambience/icons/os_proxmox.png
+          {% if refind_theming | bool %}
+              icon {{ refind_path[ efi_boot_mountpoint | length :] }}/themes/{{ refind_theme_name }}/icons/os_proxmox.png
+          {% endif %}
           }
         insertbefore: "include themes"
         marker: "## {mark} ANSIBLE MANAGED CUSTOM BOOT ENTRY ##"
         path: "{{ refind_path }}/refind.conf"
         prepend_newline: true
         append_newline: true
+
+    # Without it rEFInd picks the first entry it finds; its default scan order lists
+    # boot media (e.g. a live USB stick still plugged in) before the manual ZBM entry.
+    - name: Make the ZFSBootMenu entry the rEFInd default
+      ansible.builtin.lineinfile:
+        path: "{{ refind_path }}/refind.conf"
+        regexp: '^default_selection '
+        line: 'default_selection "ZFSBootMenu"'
+        state: present
+
+    # The shipped refind.conf has "use_nvram false": rEFInd then writes its variables
+    # (PreviousBoot, ...) to EFI/refind/vars on the ESP it booted from. With an mdadm
+    # mirrored ESP that write bypasses md, the FAT of that member diverges and later
+    # writes through md (e.g. generate-zbm) end up corrupted on it.
+    - name: Store rEFInd variables in NVRAM instead of on the ESP
+      ansible.builtin.lineinfile:
+        path: "{{ refind_path }}/refind.conf"
+        regexp: '^#?\s*use_nvram '
+        line: 'use_nvram true'
+        state: present
 
     - name: Configure display resolution for rEFInd
       ansible.builtin.lineinfile:
@@ -115,7 +189,7 @@
       when:
         - refind_resolution is defined
         - refind_resolution|length > 0
-    
+
     - name: Configure directories to exclude from scan for rEFInd
       ansible.builtin.lineinfile:
         path: "{{ refind_path }}/refind.conf"

@@ -2,7 +2,7 @@
 # [ System Tweaks Block ]######################################################
 - name: System Tweaks Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - system_tweaks
   block:
@@ -28,7 +28,7 @@
         - "systemctl enable zpool-trim@{{ root_pool_name }}.service"
         - "systemctl enable zpool-trim@{{ root_pool_name }}.timer"
       when:
-        - zfs_pool_trim_systemd_service_enable | default( false) | bool
+        - zfs_pool_trim_systemd_service_enable | default(false) | bool
 
     - name: Run commands to enable ZFS Scrub Service
       ansible.builtin.command:
@@ -39,40 +39,4 @@
         - "systemctl enable zpool-scrub@{{ root_pool_name }}.service"
         - "systemctl enable zpool-scrub@{{ root_pool_name }}.timer"
       when:
-        - zfs_pool_scrub_systemd_service_enable | default( false) | bool
-
-###############################################################################
-# [ ZFS Encryption Unlock Script and Unit File Block ]#########################
-- name: ZFS Encryption Unlock Script and Unit File Block
-  when:
-    - root_pool_encryption | default(false)
-    - disk_encryption_type == "native"
-    - ansible_nodename != "localhost"
-  tags:
-    - system_tweaks
-  block:
-    - name: ZFS encryption script to load the keyfile
-      ansible.builtin.template:
-        src: "zfs-multi-mount.sh.j2"
-        dest: "/usr/bin/zfs-multi-mount.sh"
-        owner: root
-        group: root
-        mode: "755"
-
-    - name: Install ZFS Service Templates for Encryption
-      ansible.builtin.template:
-        src: "{{ item }}.j2"
-        dest: "/etc/systemd/system/{{ item }}"
-        owner: root
-        group: root
-        mode: "644"
-      with_items:
-        - zfs-load-key.service  # ZFS encryption service to load keyfile
-
-    - name: Run commands to enable ZFS load key service
-      ansible.builtin.command:
-        cmd: "{{ item }}"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-      with_items:
-        - "systemctl enable zfs-load-key.service"
+        - zfs_pool_scrub_systemd_service_enable | default(false) | bool

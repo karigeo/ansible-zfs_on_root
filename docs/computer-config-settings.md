@@ -4,45 +4,94 @@
 
 ## UEFI or Legacy BIOS
 
-Does not matter if UEFI or Legacy BIOS is used. When available UEFI will be used, if not available it will automatically fallback to BIOS.  You should be easily able to move between these options.
+It does not matter if UEFI or legacy BIOS is used. UEFI is used when the live CD was booted in UEFI mode (`/sys/firmware/efi` exists), otherwise legacy BIOS. rEFInd (UEFI) and syslinux (legacy BIOS) are both installed on the ESP, so you can switch between both modes later.
 
 ## Default Domain Name
 
-The default domain name to assign to computers can be defined here.  This value can be overridden per host in the inventory file as needed.
+The default domain name to assign to computers can be defined here. This value can be overridden per host in the inventory file as needed.
 
 ```yaml
 # Default domain hosts will use if not defined in inventory file
 domain_name: "localdomain"
 ```
 
-## rEFInd Boot Menu Timeout
-
-By default rEFInd boot menu will wait 20 seconds for you take make a section.  This is a bit on the long side for most configurations.  This value will override this configuration:
+## rEFInd Boot Menu
 
 ```yaml
-# rEFInd Boot Menu Timeout by default is 20 seconds.
-refind_boot_menu_timeout: "10"
+# rEFInd boot menu timeout in seconds (rEFInd default is 20)
+refind_boot_menu_timeout: "5"
+
+# Specify rEFInd display resolution to use (width height)
+# Default is "0 0", which sets system default resolution
+# "max" tries to set the maximum possible resolution
+refind_resolution: "0 0"
+
+# Enable a rEFInd theme, cloned from refind_theme_repo into themes/<refind_theme_name>.
+refind_theming: true
+refind_theme_name: refind-ambience
+refind_theme_repo: https://github.com/karigeo/refind-ambience
 ```
 
-## Define Locale and Timezone
+The theme repository must contain a `theme.conf` (included from `refind.conf`) and the icon `icons/os_proxmox.png`, which is used for the ZFSBootMenu entry.
 
-Set your locale and timezone information.
+## Locale, Timezone and Keyboard
 
 ```yaml
-# Define the local pre-fix to enable in /etc/locale.gen
-locale_prefix: "en_US"
+# Default locale (generated and set in /etc/default/locale)
+default_locale: "en_US.UTF-8"
+# Further locales that should be generated and present
+locales_list:
+  - "de_DE.UTF-8"
 
-# Define the timezone to be placed in /etc/timezone
-timezone_value: "America/New_York"
+# Variables written to /etc/default/locale
+apply_locale_settings:
+  LANG: "{{ default_locale }}"
+
+# Timezone of the new system
+timezone_area: "Europe"
+timezone_city: "Berlin"
+localization_timezone: "{{ timezone_area }}/{{ timezone_city }}"
+
+# Keyboard configuration written to /etc/default/keyboard
+keyboard_model: "pc105"
+keyboard_layout: "us"
+keyboard_variant: ""
+keyboard_options: ""
+keyboard_backspace: "guess"
 ```
+
+## Network
+
+The network configuration of the new system is written to `/etc/network/interfaces` (physical interfaces and Linux bridges, as Proxmox VE expects them) and `/etc/resolv.conf`:
+
+```yaml
+# address_type can be "manual", "static" or "dhcp"; network_address uses CIDR notation.
+ipv4:
+  interfaces:  # List of physical interfaces
+    - name: eno1
+      address_type: manual
+  bridges:  # List of bridges, each with their bridge-ports (reference to interface.name)
+    - name: vmbr0
+      address_type: static
+      network_address: "192.168.100.10/24"
+      gateway: 192.168.100.1
+      bridge_ports:
+        - eno1
+      vlan_aware: true
+      bridge_vids: "2-4094"
+  dns_nameserver: 192.168.100.1
+  dns_search_domain: my.do.main   # "none" to omit the search line
+```
+
+* `ipv4.interfaces` must list at least one interface. The first one is also the default Dropbear device.
+* `/etc/hosts` gets the first static address (bridges first), otherwise the live system's address.
+* Use `bridges: []` for a plain host without bridges.
 
 ## Disable IPv6 Networking
 
-By default IPv6 networking will be disabled.  If you have a need for it, you can set `ipv6.disable: false`. You can also customize which settings are applied and how they are applied as well.
+By default IPv6 networking will be disabled. If you need it, set `ipv6.disable: false`. You can also customize which settings are applied and how they are applied.
 
 ```yaml
-# Disable IPv6 if you do not use it.  The "disable_settings" will be applied to
-# "conf_file"
 ipv6:
   disable: true
   conf_file: "/etc/sysctl.d/99-sysctl.conf"
@@ -53,25 +102,18 @@ ipv6:
   apply_cmd: "sysctl -p"
 ```
 
-## Additional Installed Packages
+## Installed Packages
 
-These are the packages to be be applied to the towards the end of the build process to be included as part of the base system installation.
+A minimal server package set (`packages_standard` in `vars/main.yml`) is installed in `final_setup`. Additional packages can be defined in `defaults/main.yml`:
 
 ```yaml
-# Define additional packages to install once the build has completed.
+# Additional packages to install once the build has completed
+# (on top of packages_standard in vars/main.yml)
 additional_install_packages:
-  - man
   - udisks2
-  - pciutils
   - net-tools
-  - ethtool
-  - fonts-ubuntu-console
-  - htop
-  - pollinate
   - fwupd
-  - needrestart
-  - unattended-upgrades
-  - lz4
+  - pollinate
 ```
 
 [Back to README.md](../README.md)

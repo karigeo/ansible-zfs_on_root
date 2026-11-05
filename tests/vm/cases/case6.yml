@@ -1,0 +1,5 @@
+# 4 disks, UEFI, no encryption, swap only (mirrored vdev pairs)
+disk_devices: [sda, sdb, sdc, sdd]
+disk_encryption_type: none
+create_lvm_partition: false
+root_partition_size: "0"

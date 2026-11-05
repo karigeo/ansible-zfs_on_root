@@ -1,0 +1,6 @@
+# Optional: 4 disks, UEFI, raidz2, no encryption, swap only
+disk_devices: [sda, sdb, sdc, sdd]
+disk_encryption_type: none
+create_lvm_partition: false
+root_partition_size: "0"
+set_root_pool_type: {1: "", 2: "mirror", 3: "raidz", 4: "raidz2", 5: "raidz", 6: "mirror", default: "raidz"}

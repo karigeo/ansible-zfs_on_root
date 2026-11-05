@@ -12,11 +12,9 @@
           # {{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }} will be rebooted.
           ##########################################################
 
-          {% if root_pool_encryption | default(false) | bool %}When prompted for passphrase for '{{
+          {% if (disk_encryption_type | default('')) in ['native', 'luks'] %}When prompted for passphrase for '{{
           root_pool_name }}', use: {{ (no_log_secrets | default(true)) | ternary("**********", passphrase) }}
           {% endif %}
-
-          Press ENTER to reboot:
 
           * Root password is now expired.
           * Ansible password is disabled, only SSH key connection allowed.
@@ -25,10 +23,11 @@
 
           {% if enable_dropbear_support | bool %}
           * Dropbear has been installed and configured, example connection:
-            ssh -i ~/.ssh/<public_key> -p 222 {{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}
+            ssh -i ~/.ssh/<public_key> -p 222 root@{{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}
+            then enter {{ (disk_encryption_type == "luks") | ternary('"unlock-luks" (LUKS passphrase), or "zbm"', '"zbm"') }}
           {% endif %}
 
-            NOTE: SSH host keys have been converted. If you experience problems, you have to remove "{{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}" from your ~/.ssh/known_hosts
+            NOTE: Dropbear uses the host keys of the system. If you experience problems, remove "{{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}" from your ~/.ssh/known_hosts
 
           Press ENTER to reboot {{ (ansible_ssh_host | default(ansible_host)) | default(inventory_hostname) }}
 

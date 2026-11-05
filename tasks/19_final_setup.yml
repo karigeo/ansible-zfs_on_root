@@ -3,7 +3,7 @@
 # [ Upgrade base system ]##################################################
 - name: Upgrade Base System Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - final_setup
   block:
@@ -16,46 +16,19 @@
         update_cache: true
         install_recommends: true
 
-    - name: Install basic software set (should equate to 'tasksel standard')
+    - name: Install minimal server package set (packages_standard)
       ansible.builtin.apt:
         autoclean: true
         autoremove: true
         install_recommends: true
-        name:
-          - task-ssh-server
-          - task-german
-          - pciutils
-          - bash-completion
-          - netcat-traditional
-          - doc-debian
-          - wget
-          - wamerican
-          - python3-reportbug
-          - systemd-timesyncd
-          - reportbug
-          - liblockfile-bin
-          - bind9-dnsutils
-          - libnss-systemd
-          - debian-faq
-          - media-types
-          - mailcap
-          - groff-base
-          - lsof
-          - bind9-host
-          - man-db
-          - krb5-locales
-          - traceroute
-          - inetutils-telnet
-          - apt-listchanges
-          - gpg
-          - gpg-agent
+        name: "{{ packages_standard }}"
 
 ###############################################################################
 # [ Disable IPv6 Networking ]##################################################
 - name: Disable IPv6 Networking Block
   when:
     - ipv6.disable | default(false) | bool
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - final_setup
     - disable_ipv6
@@ -66,6 +39,7 @@
         line: "{{ item }}"
         state: present
         create: true
+        mode: "0644"
       loop: "{{ ipv6.disable_settings }}"
       loop_control:
         label: "{{ item }}"
@@ -76,46 +50,30 @@
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
-# ###############################################################################
-# # [ Enable ZFS Email Notifications ]##########################################
-# - name: Enable ZFS Email Notifications Block
-#   when:
-#     - msmtp.enabled | default(false) | bool
-#   tags:
-#     - final_setup
-#     - install_msmtp
-#   block:
-#     # Enable ZFS Email Notifications
-#     - name: Modify syslinux-update.sh
-#       ansible.builtin.replace:
-#         path: "/etc/zfs/zed.d/zed.rc"
-#         regexp: '{{ find_values.regexp }}'
-#         replace: '{{ find_values.replace }}'
-#       loop:
-#         - { regexp: '^ZED_EMAIL_ADDR.*', replace: 'ZED_EMAIL_ADDR="{{ msmtp.msmtp_alias_default }}"' }
-#         - { regexp: '(^#)?ZED_EMAIL_OPTS.*', replace: 'ZED_EMAIL_OPTS="-s ''@SUBJECT@'' @ADDRESS@ -r {{ secret_msmtp_send_from_email }}"' }
-#       loop_control:
-#         loop_var: find_values
-
 ###############################################################################
 # [ Apply SSHD Settings ]######################################################
+# Debian's sshd_config includes /etc/ssh/sshd_config.d/*.conf first and the
+# first value found wins, so these settings take precedence.
 - name: Update SSHD Settings Block
+  when:
+    - update_sshd_settings | default(true) | bool
   tags:
     - final_setup
     - update_sshd_settings
   block:
-    - name: Update SSHD Settings
-      ansible.builtin.replace:
-        path: /etc/ssh/sshd_config
-        regexp: "^(#? ?)?{{ item.key }} +(yes|no|none|any|prohibit-password|[0-9]+|[0-9]+m)"
-        replace: "{{ item.key }} {{ item.value }}"
+    - name: Write SSHD settings drop-in file
+      ansible.builtin.template:
+        src: sshd_config_zfs_on_root.conf.j2
+        dest: /etc/ssh/sshd_config.d/50-zfs_on_root.conf
+        owner: root
+        group: root
+        mode: "0644"
         validate: "/usr/sbin/sshd -t -f %s"
-      loop: "{{ apply_sshd_settings | dict2items }}"
       register: update_sshd
 
     - name: Restart SSHD Server
       ansible.builtin.service:
-        name: sshd
+        name: ssh
         state: restarted
       when: update_sshd.changed
 
@@ -123,18 +81,18 @@
 # [ Final Setup ]##############################################################
 - name: Final Setup Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - final_setup
   block:
-
     - name: Install any remaining packages defined
       ansible.builtin.apt:
         pkg: "{{ additional_install_packages }}"
         state: present
         install_recommends: false
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
+        - additional_install_packages | default('', true) | length > 0
 
     # Set apt/dpkg to automagically snap the system datasets on install/remove
     - name: Copy apt 30pre-snap to /etc/apt/apt.conf.d/30pre-snap
@@ -145,20 +103,12 @@
         group: root
         mode: '0644'
 
-    # - name: Update timezone setting
-    #   ansible.builtin.command:
-    #     cmd: "timedatectl set-timezone {{ timezone_value }}"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
-
     - name: Expire the root password
       ansible.builtin.command:
-        cmd: "passwd --expire {{ item }}"
+        cmd: "passwd --expire root"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      loop:
-        - 'root'
-    
+
     - name: Disable ansible user password
       ansible.builtin.user:
         name: ansible

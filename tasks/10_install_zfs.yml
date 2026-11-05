@@ -1,23 +1,18 @@
 ---
 # [ Install ZFS and Kernel ]###################################################
-# If optional kernel hardware enablement feature is enabled, will be used here.
-
 - name: Install ZFS into chroot Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - install_zfs
   block:
-    - name: Install Kernel Driver Packages
+    - name: Install DKMS to build the ZFS kernel module
       ansible.builtin.apt:
-        name: >-
-          {{
-            (['dkms']) +
-            (['software-properties-common'] if distro_release == 'bookworm' else [])
-          }}
+        name:
+          - dkms
         install_recommends: false
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     - name: Ensure ZFS update rebuilds all initramfs
       ansible.builtin.copy:
@@ -30,7 +25,6 @@
         name:
           - linux-headers-generic
           - linux-image-generic
-          - dropbear-initramfs
           - wget
           - nano
           - vim
@@ -42,16 +36,7 @@
           - zfs-dkms
         install_recommends: false
       when:
-        - ansible_os_family == "Debian"
-
-    - name: Purge os-prober
-      ansible.builtin.apt:
-        name:
-          - os-prober
-        state: absent
-        purge: true
-      when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
     # The "old" kernel links mess up zfsbootmenu generation, so remove them
     # Don't need them for an initial install anyway
@@ -65,13 +50,11 @@
 
     - name: Ensure cachefile exists
       ansible.builtin.command:
-        cmd: "{{ item }}"
+        cmd: "zpool set cachefile=/etc/zfs/zpool.cache {{ root_pool_name }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      with_items:
-        - "zpool set cachefile=/etc/zfs/zpool.cache {{ root_pool_name }}"
 
-    - name: Ensure zfs-import-cache is active
+    - name: Enable ZFS import (cachefile) and mount services
       ansible.builtin.systemd_service:
         name: "{{ item }}"
         enabled: true

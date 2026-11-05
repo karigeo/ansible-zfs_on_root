@@ -1,31 +1,89 @@
 ---
-####################################################################################################
-# This script is for installing and configuring ZFS on Root from an Debian Live CD.
+###############################################################################
+# Installs Debian 13 on ZFS root from a Debian Live CD. DESTRUCTIVE: all
+# partitions on "disk_devices" are erased.
 #
-# Usage: --extra-vars='{"disk_devices": [sda, sdb], host_name: "mynewpc", passphrase: "mys3cret"}
+# Usage:
+#   ansible-playbook -i inventory.yml playbook.yml -l <host> --tags bootstrap \
+#     --extra-vars='{disk_devices: [sda, sdb], host_name: "mynewpc", passphrase: "mys3cret"}'
 #
-# The "disk_devices" specifies the devices to erase all partitions from and install ZFS filesystem on.
-# The simple "sda" style references will be converted to "disk_by_id" references.
+# The role only runs when "bootstrap" or one of its step tags (zfs_on_root_tags
+# in vars/main.yml) is requested with --tags, so it is safe to have it in a
+# site playbook. The includes are tagged "always" and gated with that "when";
+# the included tasks get the "bootstrap" tag (apply) and are selected by their
+# own tags otherwise, so single steps and --skip-tags work.
 #
-# If the required "disk_devices", or "host_name" is not specified, you will be prompted to enter it.
-######################################################################################################
+# Devices like "sda" are converted to /dev/disk/by-id (or /dev/disk/by-path)
+# references. If "disk_devices" or "host_name" is not specified, you will be
+# prompted for it.
+#
+# Phases:
+#   1. Live CD environment: checks, partitioning, encryption, pool, debootstrap
+#   2. chroot: tasks connect to the live system's sshd on port 8922, which is
+#      chrooted into live_cd_mountpoint (see 03_install_zfs_packages.yml)
+#   3. Unmount and reboot (live CD), then finalize the installed system
+# Each group of task files starts with a check (00_check_environment.yml)
+# that stops the run unless the target is the live CD, the chroot of the new
+# system or the installed system, as that group needs. It does not rely on
+# the SSH port: phase-1 steps against an installed system fail there instead
+# of wiping its disks.
+###############################################################################
 
 # [ Load up the secret files ]#####################################################################
 - name: Include Secret Files
   ansible.builtin.include_vars: "{{ item }}"
   tags: ["always"]
+  when: ansible_run_tags | intersect(zfs_on_root_tags) | length > 0
   loop:
     - secrets/main.yml
   no_log: "{{ no_log_secrets | default(true) }}"
 
-- name: Include Task Files to Configure and Setup Live CD Enviroment and Base System
-  ansible.builtin.include_tasks: "{{ task_names }}"
+
+# Each group of task files below starts with an environment check
+# (00_check_environment.yml). The check and its group run when "bootstrap" or
+# one of the group's tags (vars/main.yml) is requested, so a group never runs
+# without its check.
+
+- name: Include Task Files with Basic Checks and Prompts
+  ansible.builtin.include_tasks:
+    file: "{{ task_names }}"
+    apply:
+      tags: ["bootstrap"]
   tags: ["always"]
+  when: ansible_run_tags | intersect(zfs_on_root_tags) | length > 0
   loop:
     - 01_test_virtualbox.yml
     - 01_basic_checks.yml
-    ### - 00_DEBUGSTUFF.yml
-    - 02_confirm_defaults.yml
+  loop_control:
+    label: "{{ task_names }}"
+    loop_var: task_names
+
+- name: Check that the Install Steps run on the Live CD
+  ansible.builtin.include_tasks:
+    file: 00_check_environment.yml
+    apply:
+      tags: ["always"]
+  vars:
+    zfs_on_root_expected_env: live
+  tags: ["always"]
+  when: ansible_run_tags | intersect(['bootstrap'] + zfs_on_root_live_tags) | length > 0
+
+- name: Include Task File to Confirm the Settings
+  ansible.builtin.include_tasks:
+    file: 02_confirm_defaults.yml
+    apply:
+      tags: ["bootstrap"]
+  tags: ["always"]
+  when: ansible_run_tags | intersect(zfs_on_root_tags) | length > 0
+
+- name: Include Task Files to Configure and Setup Live CD Environment and Base System
+  ansible.builtin.include_tasks:
+    file: "{{ task_names }}"
+    apply:
+      tags: ["bootstrap"]
+  tags: ["always"]
+  when: ansible_run_tags | intersect(['bootstrap'] + zfs_on_root_live_tags) | length > 0
+  loop:
     - 03_install_zfs_packages.yml
     - 04_clear_partition_tables.yml
     - 05_create_partitions.yml
@@ -38,11 +96,26 @@
     label: "{{ task_names }}"
     loop_var: task_names
 
+# The check connects on port 22 and on port 8922 itself
+- name: Check that the chroot Steps run in the chroot of the new System
+  ansible.builtin.include_tasks:
+    file: 00_check_environment.yml
+    apply:
+      tags: ["always"]
+  vars:
+    zfs_on_root_expected_env: chroot
+  tags: ["always"]
+  when: ansible_run_tags | intersect(['bootstrap'] + zfs_on_root_chroot_tags) | length > 0
+
 - name: Include Task Files to Configure new System in chroot
   vars:
     ansible_port: 8922
-  ansible.builtin.include_tasks: "{{ task_names }}"
+  ansible.builtin.include_tasks:
+    file: "{{ task_names }}"
+    apply:
+      tags: ["bootstrap"]
   tags: ["always"]
+  when: ansible_run_tags | intersect(['bootstrap'] + zfs_on_root_chroot_tags) | length > 0
   loop:
     - 09_1_config_system.yml
     - 10_install_zfs.yml
@@ -57,12 +130,48 @@
     label: "{{ task_names }}"
     loop_var: task_names
 
-- name: Include Task Files to Reboot, Reconnect and Finalize new System Config
-  ansible.builtin.include_tasks: "{{ task_names }}"
+- name: Check that Unmount and Reboot run on the Live CD
+  ansible.builtin.include_tasks:
+    file: 00_check_environment.yml
+    apply:
+      tags: ["always"]
+  vars:
+    zfs_on_root_expected_env: live
   tags: ["always"]
+  when: ansible_run_tags | intersect(['bootstrap'] + zfs_on_root_teardown_tags) | length > 0
+
+- name: Include Task Files to Unmount the chroot and Reboot into the new System
+  ansible.builtin.include_tasks:
+    file: "{{ task_names }}"
+    apply:
+      tags: ["bootstrap"]
+  tags: ["always"]
+  when: ansible_run_tags | intersect(['bootstrap'] + zfs_on_root_teardown_tags) | length > 0
   loop:
     - 15_unmount_chroot.yml
     - 16_restart_remote.yml
+  loop_control:
+    label: "{{ task_names }}"
+    loop_var: task_names
+
+- name: Check that the Final Steps run on the Installed System
+  ansible.builtin.include_tasks:
+    file: 00_check_environment.yml
+    apply:
+      tags: ["always"]
+  vars:
+    zfs_on_root_expected_env: installed
+  tags: ["always"]
+  when: ansible_run_tags | intersect(['bootstrap'] + zfs_on_root_installed_tags) | length > 0
+
+- name: Include Task Files to Finalize new System Config
+  ansible.builtin.include_tasks:
+    file: "{{ task_names }}"
+    apply:
+      tags: ["bootstrap"]
+  tags: ["always"]
+  when: ansible_run_tags | intersect(['bootstrap'] + zfs_on_root_installed_tags) | length > 0
+  loop:
     - 17_localization.yml
     - 18_enable_dropbear.yml
     - 18_5-config_LVM.yml

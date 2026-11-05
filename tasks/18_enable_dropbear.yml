@@ -1,24 +1,23 @@
 ---
+# [ Dropbear in ZFSBootMenu ]##################################################
+# Adds the dracut crypt-ssh module (dropbear) and network configuration to the
+# ZFSBootMenu image, so the passphrase can be entered remotely via SSH (port 222).
 - name: Configure System for Dropbear and Busybox to allow Remote Unlock Block
   when:
     - enable_dropbear_support | default(false) | bool
   tags:
     - install_dropbear
   block:
-
-    - name: Install Dracut-Network and Dropbear
+    # dropbear-bin only provides the binaries for the dracut crypt-ssh module in
+    # the ZFSBootMenu image: no dropbear service on the host and no dropbear in
+    # the host initramfs (unlike the dropbear / dropbear-initramfs packages)
+    - name: Install Dracut-Network and Dropbear binaries
       ansible.builtin.apt:
-        name: ['dracut-network', 'dropbear', 'isc-dhcp-client']
+        name: ['dracut-network', 'dropbear-bin', 'isc-dhcp-client']
         state: present
       when:
-        - ansible_os_family == "Debian"
+        - ansible_facts['os_family'] == "Debian"
 
-    - name: Stop and disable dropbear.service
-      ansible.builtin.systemd_service:
-        name: dropbear
-        enabled: false
-        state: stopped
-        
     - name: Remove dracut-crypt-ssh directory
       ansible.builtin.file:
         path: "{{ item }}"
@@ -36,8 +35,9 @@
     - name: Fetch dracut-crypt-ssh source from GIT
       ansible.builtin.git:
         clone: true
-        repo: https://github.com/dracut-crypt-ssh/dracut-crypt-ssh.git
+        repo: "{{ dracut_crypt_ssh_repo_url }}"
         dest: /tmp/dracut-crypt-ssh/
+        version: "{{ dracut_crypt_ssh_version }}"
         force: true
 
     - name: Create dracut module 60crypt-ssh directory
@@ -60,7 +60,7 @@
       loop:
         - "/usr/lib/dracut/modules.d/60crypt-ssh/Makefile"
         - "/usr/lib/dracut/modules.d/60crypt-ssh/helper/"
-    
+
     # Comment out all lines containing: inst "$moddir"/helper/
     - name: Modify dracut module module-setup.sh
       ansible.builtin.replace:
@@ -68,31 +68,36 @@
         regexp: '(^.*inst "\$moddir"\/helper\/.*$)'
         replace: '#\1'
 
-    # [ Setup Dracut Networking for Dropbear]##################################
+    # [ Setup Dracut Networking for Dropbear ]#################################
+    - name: Find MAC address of device to listen on ({{ apply_dropbear_settings.remoteaccess_device }})
+      ansible.builtin.set_fact:
+        remoteaccess_macaddress: "{{ ansible_facts[apply_dropbear_settings.remoteaccess_device].macaddress }}"
 
-    # With rd.neednet=1 it will fail to boot if no network available
-    # This can be a problem with laptops and docking stations, if the dock
-    # is not connected (no ethernet) it can fail to boot
+    - name: Debug MAC address
+      ansible.builtin.debug:
+        msg: "Found MAC address: {{ remoteaccess_macaddress }} for device {{ apply_dropbear_settings.remoteaccess_device }}"
+      when:
+        debug | default(false)
+
+    # rd.neednet=1 is not set on purpose: it makes the boot fail when no network
+    # is available (e.g. laptop without its docking station)
     - name: Create file /etc/cmdline.d/dracut-network.conf for DHCP
       ansible.builtin.lineinfile:
         path: "/etc/cmdline.d/dracut-network.conf"
         regexp: '(^.*ip=.*$)'
-        line: 'ip={{ apply_dropbear_settings.remoteaccess_ip_config }} rd.neednet=1'
+        line: 'ifname=bootif:{{ remoteaccess_macaddress }} ip=bootif:{{ apply_dropbear_settings.remoteaccess_ip_config }} rd.break'
         create: true
         mode: "0644"
         state: present
         backup: false
       when:
-        - not apply_dropbear_settings.remoteaccess_ip_config == "static"
+        - apply_dropbear_settings.remoteaccess_ip_config in ['dhcp','on','any','dhcp6','auto6','link6']
 
-    # With rd.neednet=1 it will fail to boot if no network available
-    # This can be a problem with laptops and docking stations, if the dock
-    # is not connected (no ethernet) it can fail to boot
     - name: Create file /etc/cmdline.d/dracut-network.conf for Static IP
       ansible.builtin.lineinfile:
         path: "/etc/cmdline.d/dracut-network.conf"
         regexp: '(^.*ip=.*$)'
-        line: 'ip={{ apply_dropbear_settings.remoteaccess_ip }}:::{{ apply_dropbear_settings.remoteaccess_netmask }}:::none rd.neednet=1 rd.break'
+        line: 'ifname=bootif:{{ remoteaccess_macaddress }} ip={{ apply_dropbear_settings.remoteaccess_ip }}::{{ apply_dropbear_settings.remoteaccess_gateway }}:{{ apply_dropbear_settings.remoteaccess_netmask }}:{{ host_name }}:bootif:none rd.break'
         create: true
         mode: "0644"
         state: present
@@ -108,14 +113,14 @@
         state: present
         backup: false
 
-    # [ Add Dropbear welcome messate ]####################################
+    # [ Add Dropbear welcome message ]####################################
     - name: Copy dracut network banner to /etc/zfsbootmenu/dracut.conf.d/banner.txt
       ansible.builtin.template:
         src: dracut_banner.txt.j2
         dest: "/etc/zfsbootmenu/dracut.conf.d/banner.txt"
         owner: root
         group: root
-        mode: '0755'
+        mode: '0644'
 
     - name: Add network banner to dropbear startup parameters
       ansible.builtin.replace:
@@ -123,7 +128,19 @@
         regexp: '(^.* /sbin/dropbear .*$)'
         replace: '\1 -b /etc/banner.txt'
 
-    - name: Add network banner to dracut module setup
+    # The zbm-luks-unlock hook prompts on the console only; unlock-luks lets the
+    # dropbear session answer it (see files/zbm-unlock-luks.sh)
+    - name: Copy remote LUKS unlock command for the ZBM image
+      ansible.builtin.copy:
+        src: zbm-unlock-luks.sh
+        dest: /etc/zfsbootmenu/unlock-luks.sh
+        owner: root
+        group: root
+        mode: '0755'
+      when:
+        - disk_encryption_type == "luks"
+
+    - name: Add network banner (and unlock-luks) to dracut module setup
       ansible.builtin.replace:
         path: "/usr/lib/dracut/modules.d/60crypt-ssh/module-setup.sh"
         after: '(install\(\) {)'
@@ -132,56 +149,20 @@
             #
             # Copy dropbear welcome banner message
               inst /etc/zfsbootmenu/dracut.conf.d/banner.txt /etc/banner.txt
+            {% if disk_encryption_type == "luks" %}
+            # Remote LUKS unlock command
+              inst /etc/zfsbootmenu/unlock-luks.sh /usr/bin/unlock-luks
+            {% endif %}
             }
 
-    # [ Setup Host Keys ]######################################################
-    # We will convert the machine's existing host keys for dropbear to not get the "Host Key Verification Failed" error.
-    - name: Create /etc/dropbear/ directory for host keys
+    # [ Host Keys ]############################################################
+    # The dracut crypt-ssh module converts the OpenSSH host keys configured in
+    # dracut_dropbear.conf, so dropbear presents the same host keys as sshd.
+    - name: Create /etc/dropbear/ directory for authorized_keys
       ansible.builtin.file:
         path: "/etc/dropbear/"
         mode: "0755"
         state: directory
-
-    ### it seems that module-setup.sh of 60crypt-ssh can convert the openssh host system keys just fine, 
-    ### so commented out and specified host keys in dracut_dropbear.conf template
-    # - name: Copy SSH Server Keys into temporary location
-    #   ansible.builtin.copy: 
-    #     dest: "/tmp/ssh/"
-    #     src: "/etc/ssh/ssh_host_{{ item }}_key"
-    #     remote_src: true
-    #     owner: root
-    #     group: root
-    #     mode: '0600'
-    #   loop:
-    #   # The dropbear.conf will look for these 3 keys
-    #     - "ecdsa"
-    #     - "ed25519"
-    #     - "rsa"
-
-    # - name: Convert temporary ssh keys to PEM format
-    #   ansible.builtin.command:
-    #     cmd: 'ssh-keygen -p -N "" -m PEM -f /tmp/ssh/ssh_host_{{ item }}_key'
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
-    #   loop:
-    #     - "ecdsa"
-    #     - "ed25519"
-    #     - "rsa"
-
-    # - name: Convert SSH keys to dropbear format
-    #   ansible.builtin.command:
-    #     cmd: 'dropbearconvert openssh dropbear /tmp/ssh/ssh_host_{{ item }}_key /etc/dropbear/dropbear_{{ item }}_host_key'
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
-    #   loop:
-    #     - "ecdsa"
-    #     - "ed25519"
-    #     - "rsa"
-      
-    # - name: Remove temporary key files
-    #   ansible.builtin.file:
-    #     path: "/tmp/ssh/"
-    #     state: absent
 
     # [ Add dracut dropbear config file ]######################################
     - name: Copy dracut dropbear config file to /etc/zfsbootmenu/dracut.conf.d/dropbear.conf
@@ -192,9 +173,24 @@
         group: "root"
         mode: "0644"
 
-    - name: Run generate-zbm
-      ansible.builtin.shell: |
-        generate-zbm --debug
+    # [ Add authorized keys ]#################################################
+    - name: Remove dropbear authorized_keys file to recreate it
+      ansible.builtin.file:
+        path: "/etc/dropbear/authorized_keys"
+        state: absent
+
+    - name: Add authorized_keys to dropbear
+      ansible.builtin.lineinfile:
+        path: "/etc/dropbear/authorized_keys"
+        line: "{{ item }}"
+        create: true
+        mode: "0644"
+        state: present
+      loop: "{{ apply_dropbear_settings.public_key_for_dropbear }}"
+
+    - name: Regenerate ZBM image with dropbear
+      ansible.builtin.command:
+        cmd: "generate-zbm --debug"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 

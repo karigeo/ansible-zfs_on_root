@@ -2,23 +2,10 @@
 # [ Prepare for First Reboot ]#################################################
 - name: Prepare for First Reboot Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - first_boot_prep
   block:
-
-############NOT POSSIBLE, BECAUSE ANSIBLE USER IS BEING USED####################
-    # [ Configure Ansible User correctly ] ###############################
-    # - name: Disable Ansible user's password and move home
-    #   ansible.builtin.user:
-    #     name: ansible
-    #     comment: "Ansible User (use only with SSH)"
-    #     create_home: false
-    #     home: /home/ansible
-    #     move_home: true
-    #     password: '*'
-
-    # [ Start Upgrading install ]##############################################
     - name: Run apt dist-upgrade
       ansible.builtin.apt:
         upgrade: dist
@@ -26,14 +13,6 @@
         autoclean: true
         autoremove: true
         purge: true
-
-    # - name: Run commands to enable acpid if detected
-    #   ansible.builtin.command:
-    #     cmd: "{{ item }}"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
-    #   with_items:
-    #     - '[ -d /proc/acpi ] && apt-get -qq --yes install acpi acpid && systemctl enable acpid && systemctl stop acpid'
 
     - name: Add nicer PS1 USER prompt
       ansible.builtin.lineinfile:
@@ -64,47 +43,85 @@
       with_items:
         - "set -o pipefail; cat /etc/sudoers.d/zfs | sed -e 's/#//' > /etc/sudoers.d/zfsALLOW"
 
-    - name: Install pip
-      apt:
-        name:
-          - python3-pip
-
-    - name: Get currently installed Python version
-      ansible.builtin.command:
-        cmd: |
-          python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
-    
-    - name: Store Python version number
-      ansible.builtin.set_fact:
-        python_version: "{{ cmd_output.stdout }}"
-
-    - name: Display python path to be deleted
-      ansible.builtin.debug:
-        msg: "/usr/lib/python{{ python_version }}/EXTERNALLY-MANAGED"
-      when:
-        debug | default(false)
-
-    - name: Ignore PEP 668 because it's silly.
-      ansible.builtin.file:
-        path: "/usr/lib/python{{ python_version }}/EXTERNALLY-MANAGED"
-        state: absent
-
+    # Required by ansible.builtin.expect
     - name: Install pexpect
-      pip:
-        name: pexpect
+      ansible.builtin.apt:
+        name: python3-pexpect
+        state: present
 
     - name: Run command to set default root password
       ansible.builtin.expect:
         command: "passwd"
         responses:
           (?i)password: "{{ default_root_password }}"
-      no_log: "{{ no_log_secrets | default(true) }}"
+      no_log: "{{ no_log_secrets | default(true) | bool }}"
 
     - name: Run command to enable mount on default/root dataset
       ansible.builtin.command:
         cmd: "zfs set canmount=on {{ root_pool_dataset_path }}"
+      register: cmd_output
+      changed_when: cmd_output.rc == 0
+
+    # KVM/QEMU guest: install the guest agent and load the bochs video driver early
+    - name: Block to prepare system as qemu guest
+      when:
+        ansible_facts.get('virtualization_role', '') == "guest" and ansible_facts.get('virtualization_type', '') == "kvm"
+      block:
+        - name: Install qemu-guest-agent
+          ansible.builtin.apt:
+            name: qemu-guest-agent
+            state: present
+            install_recommends: false
+        - name: Enable qemu-guest-agent
+          ansible.builtin.systemd_service:
+            name: qemu-guest-agent
+            enabled: true
+        - name: Add bochs-drm driver module in initramfs
+          ansible.builtin.lineinfile:
+            path: /etc/initramfs-tools/modules
+            create: true
+            line: "bochs"
+            owner: root
+            group: root
+            mode: '0644'
+            state: present
+
+    # mdadm arrays (ESP, swap) exist now - record them so they are assembled
+    # with stable names at boot
+    - name: Scan assembled mdadm arrays
+      ansible.builtin.command:
+        cmd: mdadm --detail --scan
+      register: mdadm_scan
+      changed_when: false
+      when:
+        - disk_by_id | length | int > 1
+
+    - name: Record mdadm arrays in /etc/mdadm/mdadm.conf
+      ansible.builtin.blockinfile:
+        path: /etc/mdadm/mdadm.conf
+        marker: "# {mark} ANSIBLE MANAGED ARRAYS"
+        # A new raid5 lists a "spare" until its initial build is done; recording
+        # spares=N then triggers a SparesMissing alert on every boot
+        block: "{{ mdadm_scan.stdout | regex_replace(' spares=[0-9]+', '') }}"
+      when:
+        - disk_by_id | length | int > 1
+
+    # With a missing disk the initramfs leaves the arrays inactive and nothing starts
+    # them degraded (root is on ZFS); see files/initramfs-mdadm-release-inactive
+    - name: Install initramfs script that releases inactive mdadm arrays
+      ansible.builtin.copy:
+        src: initramfs-mdadm-release-inactive
+        dest: /etc/initramfs-tools/scripts/init-bottom/mdadm-release-inactive
+        owner: root
+        group: root
+        mode: '0755'
+      when:
+        - disk_by_id | length | int > 1
+
+    # Picks up mdadm.conf, crypttab and initramfs module changes made after the ZBM step
+    - name: Update initramfs
+      ansible.builtin.command:
+        cmd: "update-initramfs -u -k all"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 

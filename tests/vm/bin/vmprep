@@ -1,0 +1,52 @@
+#!/bin/bash
+# Resets the test VM for a case: stop, delete all disks (incl. EFI vars disk),
+# create fresh empty disks, set firmware and boot order (disks first, then the
+# live ISO, so empty disks fall through to the live CD), start.
+# Usage: vmprep <number of disks> <ovmf|seabios> [scsi|virtio]
+set -euo pipefail
+N=${1:?number of disks}; FW=${2:?ovmf or seabios}; BUS=${3:-scsi}
+. "$(dirname "$0")/common.sh"
+SIZE_GB=${VM_DISK_GB:-15}
+ISO=${VM_ISO:?set VM_ISO in vm.env}
+P="$(dirname "$0")/pve"
+eval "$(grep -E "^PVE_DISK_STORE=" "$ZFS_TEST_DIR/pve.env")"
+ST=$PVE_DISK_STORE
+
+cfg() { "$P" GET /nodes/{node}/qemu/{vmid}/config | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; [print(k) for k in d if __import__("re").fullmatch(sys.argv[1], k) and "media=cdrom" not in d[k]]' "$1"; }
+status() { "$P" GET /nodes/{node}/qemu/{vmid}/status/current | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["status"])'; }
+
+if [ "$(status)" != stopped ]; then
+  "$P" POST /nodes/{node}/qemu/{vmid}/status/stop >/dev/null
+  for _ in $(seq 1 60); do [ "$(status)" = stopped ] && break; sleep 2; done
+fi
+[ "$(status)" = stopped ] || { echo "VM did not stop"; exit 1; }
+
+# Detach disks (they become unusedN), then destroy the unused volumes
+disks=$(cfg '(scsi|virtio|sata|ide)[0-9]+|efidisk0' | paste -sd, -)
+[ -n "$disks" ] && "$P" PUT /nodes/{node}/qemu/{vmid}/config "delete=$disks" >/dev/null
+unused=$(cfg 'unused[0-9]+' | paste -sd, -)
+[ -n "$unused" ] && "$P" PUT /nodes/{node}/qemu/{vmid}/config "delete=$unused" >/dev/null
+
+args=(); order=()
+for i in $(seq 0 $((N - 1))); do
+  if [ "$BUS" = virtio ]; then
+    args+=("virtio$i=$ST:$SIZE_GB,discard=on,iothread=1,backup=0"); order+=("virtio$i")
+  else
+    args+=("scsi$i=$ST:$SIZE_GB,discard=on,iothread=1,ssd=1,backup=0"); order+=("scsi$i")
+  fi
+done
+order+=(ide2)
+if [ "$FW" = ovmf ]; then
+  args+=("bios=ovmf" "efidisk0=$ST:1,efitype=4m,pre-enrolled-keys=0")
+else
+  args+=("bios=seabios")
+fi
+args+=("ide2=$ISO,media=cdrom")
+args+=("boot=order=$(IFS=';'; echo "${order[*]}")")
+"$P" PUT /nodes/{node}/qemu/{vmid}/config "${args[@]}" >/dev/null
+"$P" GET /nodes/{node}/qemu/{vmid}/config | python3 -c '
+import json,sys; d=json.load(sys.stdin)["data"]
+for k in sorted(d):
+    if k in ("bios","boot","efidisk0","ide2") or k[:4] in ("scsi","virt","unus","sata"): print(f"  {k}: {d[k]}")'
+"$P" POST /nodes/{node}/qemu/{vmid}/status/start >/dev/null
+echo "VM started"

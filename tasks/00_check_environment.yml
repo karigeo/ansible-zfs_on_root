@@ -1,0 +1,170 @@
+---
+# [ Environment Check ]########################################################
+# Included by tasks/main.yml before each group of task files. Stops the run
+# unless the target is where that group belongs (zfs_on_root_expected_env):
+#   live:      the installer system (Debian Live CD) on port 22, with none of
+#              the target disks in use outside live_cd_mountpoint
+#   chroot:    the live check, the new root dataset mounted at
+#              live_cd_mountpoint, and port 8922 landing in a chroot of it on
+#              the same running kernel (same boot_id)
+#   installed: the new system booted from its root dataset
+# The state is read fresh on every check: ansible_facts are gathered once at
+# play start, so they are stale after the reboot and describe the live CD
+# inside the chroot. All probes are read-only (check_mode: false).
+
+###############################################################################
+# [ Installer System (port 22) ]###############################################
+- name: Check Installer System Block
+  when: zfs_on_root_expected_env in ["live", "chroot"]
+  block:
+    - name: Read the kernel command line
+      ansible.builtin.command:
+        cmd: cat /proc/cmdline
+      register: env_live_cmdline
+      changed_when: false
+      check_mode: false
+
+    # The two lines differ when the process runs in a chroot
+    - name: Compare the root directory with the one of PID 1
+      ansible.builtin.command:
+        cmd: stat -L -c %d:%i / /proc/1/root/
+      register: env_live_root_ids
+      changed_when: false
+      check_mode: false
+
+    - name: Find target disks that are in use outside the install mount point
+      ansible.builtin.script:
+        cmd: "target_disk_usage.sh {{ live_cd_mountpoint }} {{ disk_by_id | join(' ') }}"
+        executable: /bin/bash
+      register: env_live_disk_usage
+      changed_when: false
+      check_mode: false
+
+    - name: Fail if not booted from a Debian Live CD
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: The install steps must run on a system booted from a Debian Live CD,
+          but "boot=live" is not on the kernel command line of
+          {{ inventory_hostname }} ({{ env_live_cmdline.stdout }}). This looks like an
+          installed system. To install from another system (e.g. a rescue system),
+          set require_live_cd to false.
+      when:
+        - require_live_cd | bool
+        - "'boot=live' not in env_live_cmdline.stdout.split()"
+
+    - name: Fail if running inside a chroot
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: The install steps must run on the installer system itself, but the
+          connection to {{ inventory_hostname }} (port {{ ansible_port | default(22) }})
+          landed in a chroot. Check ansible_port.
+      when: env_live_root_ids.stdout_lines | unique | length != 1
+
+    - name: Fail if a target disk is in use
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: Target disks hold filesystems mounted outside {{ live_cd_mountpoint }}
+          on {{ inventory_hostname }} ("<disk> <mount point>", "?" means the devices of
+          a ZFS pool could not be resolved): {{ env_live_disk_usage.stdout_lines | join(', ') }}.
+          Wrong disk_devices, or not running on the installer system?
+      when: env_live_disk_usage.stdout_lines | length > 0
+
+###############################################################################
+# [ New System in the chroot (port 22, then port 8922) ]#######################
+- name: Check chroot Block
+  when: zfs_on_root_expected_env == "chroot"
+  block:
+    - name: Get the filesystem mounted at the install mount point
+      ansible.builtin.command:
+        cmd: "findmnt -n -o SOURCE --mountpoint {{ live_cd_mountpoint }}"
+      register: env_live_mnt_source
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Fail if the root dataset is not mounted at the install mount point
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: The chroot steps need {{ root_pool_dataset_path }} mounted at
+          {{ live_cd_mountpoint }} on {{ inventory_hostname }}, found:
+          "{{ env_live_mnt_source.stdout_lines | join(', ') }}". Run the previous steps
+          (or import the pool with -R {{ live_cd_mountpoint }}) first.
+      when: root_pool_dataset_path not in env_live_mnt_source.stdout_lines
+
+    - name: Read the boot ID of the installer system
+      ansible.builtin.command:
+        cmd: cat /proc/sys/kernel/random/boot_id
+      register: env_live_boot_id
+      changed_when: false
+      check_mode: false
+
+    - name: Probe the chroot via port 8922
+      vars:
+        ansible_port: 8922
+      block:
+        - name: Compare the root directory with the one of PID 1 in the chroot
+          ansible.builtin.command:
+            cmd: stat -L -c %d:%i / /proc/1/root/
+          register: env_chroot_root_ids
+          changed_when: false
+          check_mode: false
+
+        - name: Get the root filesystem in the chroot
+          ansible.builtin.command:
+            cmd: findmnt -n -o SOURCE --mountpoint /
+          register: env_chroot_root_source
+          changed_when: false
+          failed_when: false
+          check_mode: false
+
+        - name: Read the boot ID in the chroot
+          ansible.builtin.command:
+            cmd: cat /proc/sys/kernel/random/boot_id
+          register: env_chroot_boot_id
+          changed_when: false
+          check_mode: false
+
+    - name: Fail unless port 8922 lands in the chroot of the new system
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: Port 8922 of {{ inventory_hostname }} must land in a chroot of
+          {{ root_pool_dataset_path }} on the installer system checked via port 22.
+          Found: chroot {{ env_chroot_root_ids.stdout_lines | unique | length == 2 }},
+          root "{{ env_chroot_root_source.stdout_lines | join(', ') }}",
+          same boot_id {{ env_chroot_boot_id.stdout == env_live_boot_id.stdout }}.
+      when: >-
+        env_chroot_root_ids.stdout_lines | unique | length != 2
+        or root_pool_dataset_path not in env_chroot_root_source.stdout_lines
+        or env_chroot_boot_id.stdout != env_live_boot_id.stdout
+
+###############################################################################
+# [ Installed System (port 22) ]###############################################
+- name: Check Installed System Block
+  when: zfs_on_root_expected_env == "installed"
+  block:
+    - name: Compare the root directory with the one of PID 1
+      ansible.builtin.command:
+        cmd: stat -L -c %d:%i / /proc/1/root/
+      register: env_installed_root_ids
+      changed_when: false
+      check_mode: false
+
+    - name: Get the root filesystem
+      ansible.builtin.command:
+        cmd: findmnt -n -o SOURCE --mountpoint /
+      register: env_installed_root_source
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Fail unless running on the installed system
+      ansible.builtin.fail:
+        msg: >-
+          ERROR: These steps must run on the installed system, booted from
+          {{ root_pool_dataset_path }}. Found on {{ inventory_hostname }}: root
+          "{{ env_installed_root_source.stdout_lines | join(', ') }}", chroot
+          {{ env_installed_root_ids.stdout_lines | unique | length == 2 }}.
+          Run the install steps first.
+      when: >-
+        env_installed_root_ids.stdout_lines | unique | length != 1
+        or root_pool_dataset_path not in env_installed_root_source.stdout_lines

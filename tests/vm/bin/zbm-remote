@@ -1,0 +1,4 @@
+#!/bin/bash
+# Runs zbm-remote.py with the venv in $ZFS_TEST_DIR (vncdotool, websockets, pexpect).
+. "$(dirname "$0")/common.sh"
+exec "$ZFS_TEST_DIR/venv/bin/python" "$(dirname "$0")/zbm-remote.py" "$@"

@@ -1,145 +1,83 @@
-# DropBear Configuration Settings
+# Dropbear Configuration Settings
 
 [Back to README.md](../README.md)
 
-## Dropbear  Integrated
+## Dropbear in ZFSBootMenu
 
-This enables a small SSH service at boot time to allow a connection to be made remotely to enter the native ZFS Encryption passphrase. Once entered the system will continue the boot up process.  If you are not using ZFS encryption then there is no need to enable or configure this.
+This adds a small SSH server ([Dropbear](https://matt.ucc.asn.au/dropbear/dropbear.html), via the [dracut-crypt-ssh](https://github.com/dracut-crypt-ssh/dracut-crypt-ssh) module) to the ZFSBootMenu image. You can connect remotely at boot time to enter the encryption passphrase (LUKS or ZFS native). Once entered, the system continues to boot. Without encryption there is no need to enable this.
+
+* Dropbear only runs inside ZFSBootMenu (port 222). There is no dropbear service on the installed system and no dropbear in its initramfs.
+* Dropbear uses the system's OpenSSH host keys (ECDSA, ED25519), so it presents the same host keys as `sshd`.
+* Login is key-based only, always as `root`.
 
 ### Enable Dropbear
 
-Dropbear can be enabled in the `defaults/main.yml` by setting `enable_dropbear_support` to `true`:
+Dropbear is configured in `defaults/main.yml` (task file `18_enable_dropbear.yml`, after the first reboot):
 
 ```yaml
 enable_dropbear_support: true
 apply_dropbear_settings:
-  # Automatic (dhcp) or static IP assignment for zfsbootmenu remote access
-  # "dhcp", "dhcp,dhcp6", "dhcp6", or "static"
+  # Physical network device to bring up for remote access
+  remoteaccess_device: "{{ ipv4.interfaces[0].name }}"
+  # IP configuration for ZFSBootMenu remote access (dracut ip= option):
+  # "dhcp", "dhcp6", "on", "any", "auto6", "link6" or "static"
   remoteaccess_ip_config: "dhcp"
   # Remote access static IP address to connect to ZFSBootMenu
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
-  remoteaccess_ip: "192.168.0.222"
+  remoteaccess_ip: "192.168.100.10"
   # Remote access subnet mask
   # Only used with "static", not used for dhcp or dhcp6 automatic IP configuration
   remoteaccess_netmask: "255.255.255.0"
+  # Remote access gateway
+  # Only used with "static"
+  remoteaccess_gateway: "192.168.100.1"
+  # List of public keys (authorized_keys lines) allowed to log in to dropbear.
+  # Note that login to dropbear is "root" regardless of the key used.
+  public_key_for_dropbear: ["ssh-ed25519 ABCDEFG user@machine"]
 ```
 
-* The `remoteaccess_ip_config` selects if you want Dropbear to request a DHCP address or you wish to supply a static IP address
-  * If a static address is selected, then set `remoteaccess_ip` and `remoteaccess_netmask` to the appropriate values
+* `remoteaccess_device` is matched by its MAC address, so the name of the device inside ZFSBootMenu does not matter.
+* With `remoteaccess_ip_config: "static"` set `remoteaccess_ip`, `remoteaccess_netmask` and `remoteaccess_gateway`.
+* The network configuration is written to `/etc/cmdline.d/dracut-network.conf`. `rd.neednet=1` is not set, so the system still boots without network.
 
 ### Dropbear Keys
 
-The ED25519, ECSDA, or RSA public keys authorized to connect to Dropbear are defined below.
-
-```yaml
-  # Define the full path to public key(s) you want to include in Dropbear
-  # Allow dracut / dropbear use main user authorized_keys for access
-  # Note that login to dropbear is "root" regardless of which authorized_keys is used
-  public_key_for_dropbear: "/home/{{ regular_user_accounts[0].user_id }}/.ssh/authorized_keys"```
-```
-
-The default value shown above, states that any authorized key defined by the first non-root user as specified in [Define the Non-Root Account(s)](../README.md#define-the-non-root-accounts) will be allowed to connect to Dropbear.
-
-If you add or remove key(s) from this user and have that reflected in Dropbear, then run:
+`public_key_for_dropbear` is a list of public keys. They are written to `/etc/dropbear/authorized_keys`, which is included in the ZFSBootMenu image. After changing that file manually, regenerate the image:
 
 ```shell
-sudo dracut -v -f --regenerate-all
 sudo generate-zbm --debug
 ```
 
 ### Manual Execution or Refresh Settings
 
-If at some point in the future you wish to install Dropbear or update its configuration manually use:
+To install Dropbear or update its configuration later, run only this step:
 
 ```bash
-ansible-playbook zfs_on_root.yml -l hostname --tags="install_dropbear"
+ansible-playbook -i inventory.yml ./playbook.yml -l <remote_host_name> --tags="install_dropbear"
 ```
 
-### Connecting to Remote Server's Dropbear Prompt
+### Connecting to Dropbear
 
-To establish an `ssh` connection to a remote system with Dropbear installed, use any key defined in your authorized_keys on the remote host.  To copy one of your keys to the remote system:
-
-```shell
-$ ssh-copy-id -i ~/.ssh/dropbear_ed25519 <user_name>@<remote_host_name>
-
-/usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: "/home/<user_name>/.ssh/dropbear_ed25519.pub"
-/usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
-/usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
-<user_name>@<remote_host_name>'s password: 
-
-Number of key(s) added: 1
-
-Now try logging into the machine, with:   "ssh '<user_name>@<remote_host_name>'"
-and check to make sure that only the key(s) you wanted were added.
-```
-
-### Test SSH Key Pair is Valid
-
-* You should now be able to perform a standard ssh login to the remote system with this key, it will NOT prompt for a password and you should get the banner and user command prompt:
-
-```shell
-$ ssh -i ~/.ssh/dropbear_ed25519 <remote_host_name>
-
-Welcome to Ubuntu 22.04.1 LTS (GNU/Linux 5.15.0-53-generic x86_64)
-
- * Documentation:  https://help.ubuntu.com
- * Management:     https://landscape.canonical.com
- * Support:        https://ubuntu.com/advantage
-
-The list of available updates is more than a week old.
-To check for new updates run: sudo apt update
-
-<user_name>@<remote_host_name>:~$
-```
-
-Upon rebooting the remote system, you can connect to Dropbear as follows. This example uses a ED25519 key to connect as root (no matter what key you connect with, you must always connect as the root user).
+When the system boots, connect as `root` on port 222 with one of the configured keys:
 
 ```bash
 $ ssh -i ~/.ssh/dropbear_ed25519 -p 222 root@<remote_host_name>
 
-Welcome to the ZFSBootMenu initramfs shell. Enter "zbm" to start ZFSBootMenu.
-zfsbootmenu ~ > 
+Welcome to the ZFSBootMenu initramfs shell. Enter "zfsbootmenu" or "zbm" to start ZFSBootMenu.
+zfsbootmenu ~ >
 ```
 
-* Enter `zbm` to access the ZFSBootMenu:
-
-You will then be prompted to enter the ZFS encryption passphrase:
-
-```shell
-Enter passphrase for '{root_pool_name}/ROOT':
-```
-
-* Enter your passphrase to unlock the ZFS pool.
-* If entered incorrectly you will be given additional attempts.
-
-You will then be presented with the ZFSbootMenu to select what to boot or rollback the system to a previous ZFS snapshot, etc.  Once a selection is made connection is closed and system boot sequence proceeds.  The Dropbear SSH service will not be running once the system has booted.
-
-* NOTE: SSH clients have started to drop support for RSA keys.  The `-o PubKeyAcceptedKeyTypes=+ssh-rsa` is required on such clients otherwise you will get an access denied trying to connect, such as:
-
-```shell
-ssh -i ~/.ssh/dropbear_rsa -o PubKeyAcceptedKeyTypes=+ssh-rsa -p 222 root@<remote_host_name>
-```
+* **LUKS:** enter `unlock-luks`. It lists the partitions to unlock and asks for the passphrase. The LUKS hook of ZFSBootMenu asks on the console only and ZFSBootMenu waits for it; `unlock-luks` answers it from the SSH session, after that ZFSBootMenu continues on the console and boots the default boot environment. Enter `zbm` to choose another one instead.
+* **ZFS native encryption:** enter `zbm`. The prompt names the pool (`Enter passphrase for '<root_pool_name>':`).
+* Select what to boot (or roll back to a snapshot). The connection is closed and the system boots. Dropbear does not run once the system has booted.
+* With `remoteaccess_ip_config: "dhcp"` ZFSBootMenu requests its own lease. Depending on the DHCP server it can get a different address than the installed system (e.g. a reservation for the MAC address that is not applied), use `"static"` if the address must be known.
 
 ### Changing the Dropbear Banner Text
 
-The default contents of the Dropbear banner as used by Ansible is defined in `templates/dracut_banner.txt.j2` and can be customized as you like.  
-
-This template will be rendered and placed at `/etc/zfsbootmenu/dracut.conf.d/banner.txt` on the target system.  You can make modifications to this file directly as well. If you modify this file then you need to regenerate the initramfs image via:
-
-```shell
-sudo dracut -v -f --regenerate-all
-sudo generate-zbm --debug
-```
+The banner is defined in `templates/dracut_banner.txt.j2` and placed at `/etc/zfsbootmenu/dracut.conf.d/banner.txt`. After modifying that file, regenerate the image with `sudo generate-zbm --debug`.
 
 ### Dropbear Configuration File
 
-The default contents of the Dropbear configuration file as used by Ansible is defined in `templates/dracut_dropbear.conf.j2` and can be customized.
-
-This template will be rendered and placed at `/etc/zfsbootmenu/dracut.conf.d/dropbear.conf` on the target system. You can make modifications to this file directly as well. If you modify this file then you need to regenerate the initramfs image via:
-
-```shell
-sudo dracut -v -f --regenerate-all
-sudo generate-zbm --debug
-```
+The dracut configuration for Dropbear is defined in `templates/dracut_dropbear.conf.j2` and placed at `/etc/zfsbootmenu/dracut.conf.d/dropbear.conf`. After modifying that file, regenerate the image with `sudo generate-zbm --debug`.
 
 [Back to README.md](../README.md)

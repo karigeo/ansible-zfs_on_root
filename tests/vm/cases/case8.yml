@@ -1,0 +1,3 @@
+# Tag behaviour: 1 disk, UEFI, no encryption, swap + LVM (step tags run one by one)
+disk_devices: [sda]
+disk_encryption_type: none

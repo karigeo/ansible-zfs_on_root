@@ -4,30 +4,28 @@
 
 ## Enable SSHD Configuration
 
-The `update_sshd_settings` within `defaults/main.yml` will  enable (true) or disable (false) updating SSH entries.
+`update_sshd_settings` in `defaults/main.yml` enables (`true`) or disables (`false`) applying the SSHD settings below.
 
 ## SSHD Configuration Settings
 
-Some of the basic, more common SSHD Configuration settings can be updated.  Ansible does not have a specific module for updating `sshd_config`.  The grep rules in the helper task handle most of the `yes`, `no`, `numerical` such as 10, 22, or 2m.  More complex matches like IP addresses and directory paths are not supported.
+The settings in `apply_sshd_settings` are written as `Key value` lines to the drop-in file `/etc/ssh/sshd_config.d/50-zfs_on_root.conf` (validated with `sshd -t`). Debian's `/etc/ssh/sshd_config` includes `sshd_config.d/*.conf` at the top and the first value found wins, so these settings override the defaults. Any `sshd_config` keyword and value can be used (no `Match` blocks).
 
 ```yaml
 ###############################################################################
-# The following SSHD Settings will be applied at final_cleanup
-# IMPORTANT: Only some basic settings which can be search and replaced using values
-#            such as works such as: "yes", "no", "none", "any", "prohibit-password",
-#             digits (such as 10, 22, or 2m). Does not match fancy items like
-#            IP Address or full directory paths.
+# SSH Settings
+###############################################################################
 update_sshd_settings: true
 apply_sshd_settings:
   PasswordAuthentication: "no"
   PermitRootLogin: "prohibit-password"
   PubkeyAuthentication: "yes"
+  UsePAM: "yes"
 ```
 
-Values can be changed and new key pair entries can be added. When ready to deployed changes (and `sshd` service will be restarted) using the following:
+Values can be changed and new entries can be added. To deploy changes (the `ssh` service is restarted when the file changes):
 
 ```bash
-ansible-playbook -i inventory zfs_on_root.yml --tags="update_sshd_settings"
+ansible-playbook -i inventory.yml ./playbook.yml -l <remote_host_name> --tags="update_sshd_settings"
 ```
 
 [Back to README.md](../README.md)

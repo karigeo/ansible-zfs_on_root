@@ -1,97 +1,70 @@
 ---
 ###############################################################################
-# ###[ Create Standard ZFS Root Pool ]###########################################
-# This block is for single standalone device, dual device mirror, three device
-# mirror or three device raidz, or any odd number of devices.
+# ###[ Keyfile for ZFS Native Encryption ]#####################################
+- name: Create keyfile for ZFS native encryption
+  when:
+    - disk_encryption_type == "native"
+    - ansible_facts['nodename'] != "localhost"
+  tags:
+    - create_pools
+  ansible.builtin.copy:
+    dest: "{{ zfs_native_keyfile }}"
+    content: "{{ passphrase }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: "{{ no_log_secrets | default(true) | bool }}"
+
+###############################################################################
+# ###[ Create Standard ZFS Root Pool ]#########################################
+# Single device, mirror, raidz or raidz2 - all devices form one vdev.
+# Only 4+ devices of type "mirror" are handled by the mirrored vdevs block below.
 - name: Create Standard ZFS Root Pool Block
   when:
-    - disk_by_id | length | int is odd or
-      disk_by_id | length | int == 2
-    - ansible_nodename != "localhost"
+    - not (root_pool_type == "mirror" and disk_by_id | length | int >= 4)
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_pools
   block:
     - name: Debug Create ZFS Root Pool
       ansible.builtin.debug:
-        msg: "zpool create {{ root_pool_create_params }}"
+        msg: "zpool create -f {{ root_pool_create_params }}"
       when:
         - debug | default(false)
 
     - name: Create Standard ZFS Root Pool
       ansible.builtin.command:
-        "zpool create -f {{ root_pool_create_params }}"
+        cmd: "zpool create -f {{ root_pool_create_params }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
 ###############################################################################
-
-# ###[ Create Mirror VDEVs ZFS Root Pool ]#######################################
-##### High Performance ZFS Root Pool, add mirrored pairs of VDEVS to pools ####
-##### Requires 4 or more devices and root_pool_type must be "mirror"       ####
-
+# ###[ Create Mirror VDEVs ZFS Root Pool ]#####################################
+# High performance root pool built from mirrored pairs of devices (vdevs).
+# Requires 4 or more (even number of) devices and root_pool_type "mirror".
 - name: Create Mirrored vdevs Based Root Pool Block
   when:
     - root_pool_type == "mirror"
-    - (disk_by_id | length | int >= 4)
-    - ansible_nodename != "localhost"
+    - disk_by_id | length | int >= 4
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - create_pools
   block:
-    - name: Create List of devices to be used (Native or no Encryption --> Disk-by-ID, LUKS --> crypt mappers)
-      ansible.builtin.set_fact:
-        device_list: "{{ (disk_encryption_type == 'luks') | ternary(['/dev/mapper/crypt_'] | product(disk_by_id|map('regex_search','([^\/]+$)')|list) | map('join','') | product(['_root']) | map('join','') , disk_by_id ) }}"
-
-    - name: Get two first mirrored vdev pairs
-      ansible.builtin.set_fact:
-        two_root_pool_devices: "{{ two_root_pool_devices | default([]) + [device_list[item | int]] }}"
-      with_sequence: start=0 end=1
-
-    ###############
-    # TODO: When encypted with LUKS, the addendum "root_partition_name_suffix" must not be used
-    # IDEA: Maybe use "set_fact" to just set "root_partition_name_suffix" as empty. Seems to be dirty somehow.
-    ###############
-    - name: Clear root_partition_name_suffix
-      ansible.builtin.set_fact:
-        root_partition_name_suffix: "{{ root_partition_name_suffix if disk_encryption_type == 'native' or disk_encryption_type == 'none' else '' if disk_encryption_type == 'luks' }}"
-
-    - name: Debug root_partition_name_suffix
-      ansible.builtin.debug:
-        msg: "root_partition_name_suffix has value: {{ root_partition_name_suffix }}"
-      when:
-        - debug|default(false)
-
     - name: Debug Create Mirrored vdev ZFS Root Pool
       ansible.builtin.debug:
-        msg: >
-          zpool create -f {{ root_pool_options | join(' ') }} {{ root_pool_type }} \
-                          {{ two_root_pool_devices | join(root_partition_name_suffix + ' ') + root_partition_name_suffix + ' ' }}"
+        msg: "zpool create -f {{ root_pool_create_options }} {{ root_pool_name }} mirror {{ root_pool_devices[0] }} {{ root_pool_devices[1] }}"
       when:
-        - debug|default(false)
+        - debug | default(false)
 
-    - name: Create Mirrored vdev ZFS Root Pool
-      ansible.builtin.command: >
-        zpool create -f {{ root_pool_options | join(' ') }} {{ root_pool_type }} \
-                        {{ two_root_pool_devices | join(root_partition_name_suffix + ' ') + root_partition_name_suffix + ' ' }}
+    - name: Create Mirrored vdev ZFS Root Pool with the first device pair
+      ansible.builtin.command:
+        cmd: "zpool create -f {{ root_pool_create_options }} {{ root_pool_name }} mirror {{ root_pool_devices[0] }} {{ root_pool_devices[1] }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
 
-    # If number of devices-1, could be less than 2, then set to 2.
-    - name: Set number of mirrored vdev devices remaining
-      ansible.builtin.set_fact:
-        device_count: "{{ (device_list | length | int > 3) | ternary(device_list | length | int - 1, 2) }}"
-
-    - name: Display debug message of number of vdev devices remaining
-      ansible.builtin.debug:
-        msg: "Num Devices: {{ device_list | length | int }}, VDEV device_count set to: {{ device_count }}"
-      when:
-        - debug|default(false)
-
-    - name: Attaching remaining vdev mirrors to Root Pool
-      ansible.builtin.command: >
-        zpool add -f {{ root_pool_name }} {{ root_pool_type }} "{{ device_list[item | int] }}{{ root_partition_name_suffix }}" \
-          "{{ device_list[item | int + 1] }}{{ root_partition_name_suffix }}"
-      with_sequence: start=2 stride=2 end="{{ device_count }}"
+    - name: Attach remaining mirrored vdev pairs to Root Pool
+      ansible.builtin.command:
+        cmd: "zpool add -f {{ root_pool_name }} mirror {{ root_pool_devices[item] }} {{ root_pool_devices[item + 1] }}"
+      loop: "{{ range(2, root_pool_devices | length, 2) | list }}"
       register: cmd_output
       changed_when: cmd_output.rc == 0
-
-###############################################################################

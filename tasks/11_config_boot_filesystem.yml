@@ -1,23 +1,17 @@
 ---
 # [ Setup Boot Partition as mdadm mirror for multi-disk setups ]###############
+# metadata 1.0 puts the md superblock at the end of the partition, so the
+# firmware sees each member as a plain FAT32 EFI system partition.
 - name: Create Boot Partition Mirror Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - disk_by_id | length | int > 1
   tags:
     - config_boot_fs
   block:
-    # Create name of boot device
-    - name: Create name of boot device
+    - name: Set name of boot device
       ansible.builtin.set_fact:
         boot_dev_name: "/dev/md/BOOT_EFI"
-
-    # Create a list of device partitions to use
-    - name: Create a list of device partitions to use
-      ansible.builtin.set_fact:
-        mdadm_device_list: "{{ mdadm_device_list | default('') }} {{ item }}-part{{ boot_partition }}"
-      loop:
-        "{{ disk_by_id }}"
 
     - name: Unmount any mdadm disks that might have been automounted and Stop all found mdadm arrays
       ansible.builtin.shell: >
@@ -38,48 +32,41 @@
       loop:
         "{{ disk_by_id }}"
 
-    # The "-R" - is needed to suppress the "Continue creating array?" prompt
+    # The "-R" is needed to suppress the "Continue creating array?" prompt
     - name: Run command to create mdadm device for multi-disk boot partition
       ansible.builtin.command:
-        cmd: >
+        cmd: >-
           mdadm --create {{ boot_dev_name }} --verbose -R --metadata=1.0 --force --level=mirror
           --raid-devices={{ disk_by_id | length | int }} --homehost={{ host_name }}
-          --name=efi  --assume-clean {{ mdadm_device_list }}
+          --name=efi --assume-clean
+          {{ disk_by_id | product(['-part' + boot_partition]) | map('join') | join(' ') }}
         creates: "{{ boot_dev_name }}"
       register: cmd_output
-      changed_when: cmd_output.rc == 0
 
-    - name: Run command to create mdadm.conf file multi-disk boot partition
-      ansible.builtin.command:
-        cmd:
-          mdadm --examine --scan >> /etc/mdadm/mdadm.conf
-        creates: "{{ boot_dev_name }}"
-      register: cmd_output
-      changed_when: cmd_output.rc == 0
+    # The ARRAY lines for /etc/mdadm/mdadm.conf are written at the end of the
+    # chroot phase (13_first_boot_prep.yml), once all arrays exist.
 
 ###############################################################################
-# [ Create Boot Partition for single disk setups ]#############################
-- name: Create Boot Filesystem Block
+# [ Use the Boot Partition directly on single disk setups ]####################
+- name: Single Disk Boot Device Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
     - disk_by_id | length | int == 1
   tags:
     - config_boot_fs
   block:
-    # Create name of boot device
-    - name: Create name of boot device
+    - name: Set name of boot device
       ansible.builtin.set_fact:
         boot_dev_name: "{{ disk_by_id[0] }}-part{{ boot_partition }}"
 
 ###############################################################################
-# [ Create Boot EFI Directory ]################################################
+# [ Create EFI Filesystem and Directory ]######################################
 - name: Create Boot Filesystem Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - config_boot_fs
   block:
-
     - name: Create EFI filesystem on boot device
       community.general.filesystem:
         dev: "{{ boot_dev_name }}"
@@ -97,11 +84,10 @@
 # [ Build up fstab file ]######################################################
 - name: Build fstab File Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - config_boot_fs
   block:
-    # Debug Remove any existing /boot/efi references within chroot environment
     # Entries would only exist if this task had been run previously
     - name: Remove any existing /boot/efi references from fstab
       ansible.builtin.replace:
@@ -119,7 +105,7 @@
       ansible.builtin.command:
         cmd: "blkid -s UUID -o value \"{{ boot_dev_name }}\""
       register: boot_dev_uuid
-      changed_when: boot_dev_uuid.rc == 0
+      changed_when: false
       failed_when: boot_dev_uuid.stdout == ''
 
     - name: Mount /boot/efi and configure fstab
@@ -127,26 +113,17 @@
         boot: true
         dump: 0
         fstype: vfat
-        opts: nofail,x-systemd.device-timeout=1,x-systemd.after=zfs-mount.service
+        opts: nofail,x-systemd.after=zfs-mount.service
         passno: 1
-        path: /boot/efi
+        path: "{{ efi_boot_mountpoint }}"
         src: "/dev/disk/by-uuid/{{ boot_dev_uuid.stdout }}"
-        # src: "{{ (disk_by_id | length | int > 1) | ternary(boot_dev_name, boot_dev_path_single.stdout) }}"
         state: mounted
-
-    # - name: Add EFI Filesystems to /etc/fstab
-    #   ansible.builtin.shell:
-    #     cmd: >
-    #       echo /dev/disk/by-uuid/$(blkid -s UUID -o value "{{ boot_dev_name }}")
-    #       /boot/efi vfat nofail,x-systemd.device-timeout=1,x-systemd.after=zfs-mount.service 0 1 >>"/etc/fstab"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
 
     - name: Debug get contents of chroot /etc/fstab
       ansible.builtin.command:
         cmd: "cat /etc/fstab"
       register: cmd_output
-      changed_when: cmd_output.rc == 0
+      changed_when: false
       when:
         debug | default(false)
 
@@ -155,16 +132,5 @@
         var: cmd_output['stdout']
       when:
         debug | default(false)
-
-    # Mount /boot/efi directory in chroot environment
-    # - name: Mount /boot/efi directory
-    #   ansible.posix.mount:
-    #     path: "{{ efi_boot_mountpoint }}"
-    #     state: "remounted"
-    # - name: Run command to mount /boot/efi directory
-    #   ansible.builtin.command:
-    #     cmd: "mount {{ efi_boot_mountpoint }}"
-    #   register: cmd_output
-    #   changed_when: cmd_output.rc == 0
 
 ###############################################################################

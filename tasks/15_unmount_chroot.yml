@@ -1,27 +1,34 @@
 ---
 # [ Unmount chroot ]###########################################################
-- name: Prepare for First Reboot Block
+- name: Unmount chroot Block
   when:
-    - ansible_nodename != "localhost"
+    - ansible_facts['nodename'] != "localhost"
   tags:
     - unmount_chroot
   block:
-  # Issue trying to get everything unmounted cleanly
-  # https://github.com/openzfs/openzfs-docs/issues/270
+    # Issue trying to get everything unmounted cleanly
+    # https://github.com/openzfs/openzfs-docs/issues/270
+    # 1. Kill processes still running inside the chroot (e.g. sshd sessions of the
+    #    port 8922 connection or a gpg-agent started by apt).
+    # 2. Lazy unmount all non-ZFS mounts below the chroot, deepest first.
+    # 3. Unmount the ZFS datasets.
     - name: Unmount chroot file systems
       ansible.builtin.shell: |
+        for proc in /proc/[0-9]*; do
+          if [ "$(readlink "${proc}/root" 2>/dev/null)" = "{{ live_cd_mountpoint }}" ]; then
+            kill -9 "${proc#/proc/}" 2>/dev/null
+          fi
+        done
+        sleep 1
+        mount | awk '$3 ~ "^{{ live_cd_mountpoint }}/" && $5 != "zfs" {print $3}' | sort -r | xargs -r -n1 umount -lf
         zfs umount -a
-        mount | grep -v zfs | tac | awk '/\/mnt/ {print $3}' | xargs -i{} umount -lf {}
-        umount /mnt/*
-        umount -R /mnt
-        umount -l /mnt
-        grep /mnt /proc*/mounts | tac | awk '{print $3}' FS="/" | uniq | xargs -i{} kill -9 {}
-
-        ZFSBUILD_C=$(echo {{ live_cd_mountpoint }} | sed -e 's!/!\\/!'g)
-        mount | grep -v zfs | tac | awk '/${ZFSBUILD_C}/ {print $3}' | xargs -i{} umount -lf {}
+        umount -R {{ live_cd_mountpoint }} 2>/dev/null
+        umount -l {{ live_cd_mountpoint }} 2>/dev/null
+        true
+      args:
+        executable: /bin/bash
       register: cmd_output
       changed_when: cmd_output.rc == 0
-      ignore_errors: true
 
     - name: Export all ZFS Pools
       ansible.builtin.command:

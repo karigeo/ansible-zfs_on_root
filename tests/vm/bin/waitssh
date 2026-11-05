@@ -1,0 +1,13 @@
+#!/bin/bash
+# Waits until the VM answers SSH as ansible with the test key.
+# Usage: waitssh [live|installed] [timeout seconds]
+# live: also waits for /run/zfs-test-ready (live CD prep finished).
+. "$(dirname "$0")/common.sh"
+MODE=${1:-live}; TIMEOUT=${2:-900}
+check='true'; [ "$MODE" = live ] && check='test -f /run/zfs-test-ready'
+start=$(date +%s)
+until ssh "${SSH_OPTS[@]}" "ansible@$VM_IP" "$check" 2>/dev/null; do
+  [ $(( $(date +%s) - start )) -gt "$TIMEOUT" ] && { echo "TIMEOUT waiting for $MODE"; exit 1; }
+  sleep 5
+done
+echo "$MODE ready after $(( $(date +%s) - start ))s"

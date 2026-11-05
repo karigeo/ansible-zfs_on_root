@@ -6,11 +6,13 @@
 
 On [Minisform U560](https://store.minisforum.com/products/um560) after the 1st reboot it went directly into AMI BIOS screen.  It acted as if there were no bootable devices within the system.  Pressing `F7` for boot menu found no devices.  This is NOT typical of a UEFI system.
 
-* Some UEFI BIOS are hardcoded to look for specific files on the ESP partition mounted as `/etc/boot/efi/EFI` directory. Minisform U560 was looking for `EFI/boot/bootx64.efi` which is not used by rEFInd boot manager.
-* The `sudo efibootmgr -v` from within the Ubuntu Live CD can be used to view the current UEFI lookup table.
+* Some UEFI BIOS are hardcoded to look for specific files on the ESP partition (mounted at `/boot/efi`). Minisform U560 was looking for `EFI/boot/bootx64.efi` which is not used by rEFInd boot manager.
+* The `sudo efibootmgr -v` from within the Debian Live CD can be used to view the current UEFI lookup table.
 * rEFInd boot manager will generate a `EFI/refind/refind_x64.efi` image.
 
-I needed to add a reference to the `refind_x64.efi` image FOR EACH bootable device in the system - a SATA SSD (`sda`) and NVMe SSD (`nvme0n1`).  Before the 1st reboot of the target system, while still within the Ubuntu Live CD environment, I used the following:
+NOTE: On multi-disk UEFI installs the role already creates a UEFI boot entry `rEFInd <disk-id>` for the ESP of every disk (task `install_refind`).
+
+I needed to add a reference to the `refind_x64.efi` image FOR EACH bootable device in the system - a SATA SSD (`sda`) and NVMe SSD (`nvme0n1`). Before the 1st reboot of the target system, while still within the Debian Live CD environment, I used the following:
 
 ```shell
 efibootmgr --create --gpt --disk /dev/sda --part 1 -w --loader "\\EFI\\refind\\refind_x64.efi" --label "rEFInd-sda1"
