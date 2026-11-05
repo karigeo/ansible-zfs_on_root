@@ -237,6 +237,13 @@
         - { regexp: '^KERNEL_PATH.*', replace: 'KERNEL_PATH="EFI/zfsbootmenu"' }
         - { regexp: '^SYSLINUX_CONFD.*', replace: 'SYSLINUX_CONFD="{{ efi_boot_mountpoint }}/snippets"' }
         - { regexp: '^cp .*', replace: 'cp "${SYSLINUX_CFG}" "${SYSLINUX_ROOT}/syslinux/syslinux.cfg"' }
+        # The first image becomes the DEFAULT. "sort -V -r" puts vmlinuz-bootmenu-backup
+        # before vmlinuz-bootmenu, so syslinux booted the previous ZBM image (e.g.
+        # without dropbear). List the backup images last.
+        - regexp: '^readarray -t KERNELS .*'
+          replace: >-
+            readarray -t KERNELS < <(printf '%s\\n' "${KERNEL_DIR}/${KERNEL_PREFIX}"* | sort -V -r | grep -v -- '-backup$';
+            printf '%s\\n' "${KERNEL_DIR}/${KERNEL_PREFIX}"*-backup | sort -V -r)
       loop_control:
         loop_var: find_values
 
