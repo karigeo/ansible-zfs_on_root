@@ -1,47 +1,46 @@
 # Next Steps
 
-Status after the review/cleanup of 2026-11-03 (commits `825753f`..`7776666` on `dev-deb13`, not pushed). All changes are checked only statically (ansible-lint, YAML parse, syntax check, template/variable test renders). **Nothing has run on a real machine yet.**
+Status 2026-11-05: the whole test matrix (section 2) ran on a Proxmox VM with the scripts in `tests/vm/` and passes after 15 fix commits (`121d4b7`..`91706d4` on `dev-deb13`, not pushed). Per-case logs and check outputs are local in `~/.config/claude-zfs-test/logs/`.
 
-## 1. Before the first test run
+## 1. Own playbook and inventory
+
+The test runs use their own playbook/inventory (`tests/vm/`). Your local files still need:
 
 - [ ] Local `playbook.yml` (gitignored): fix the role path (`/Users/simon/Ansible/ansible-zfs_on_root` → `/Users/simon/Ansible/homelab/roles/ansible-zfs_on_root` or the role name) and add `tags: [never, bootstrap]` to the role (optional, the role is inert without its tags anyway).
 - [ ] Runs now need `--tags bootstrap` (or a step tag, see README).
 - [ ] Local `inventory.yml` (gitignored): convert `ipv4.iface` / `ipv4.bridge` to the current `ipv4.interfaces` / `ipv4.bridges` lists (see `defaults/main.yml`). `public_key_for_dropbear` must be a list of keys, not a path.
-- [ ] The test VM uses `vda`: virtio disks without serial now resolve via `/dev/disk/by-path`. Optionally set a serial on the Proxmox VM disk to get a by-id name.
+- [ ] With `remoteaccess_ip_config: "dhcp"` ZFSBootMenu got a different address than the DHCP reservation in the tests (10.11.30.17 instead of .33); use `"static"` if dropbear must be at a known address.
 
-## 2. Test matrix
+## 2. Test matrix: results
 
-Run each case on a Proxmox VM booted from the Debian 13 Live ISO (prepared with `files/do_ssh.sh`). Every run wipes the VM disks.
+Proxmox VM (q35, 15 GB disks), Debian Live 13.7.0 standard (kernel 6.12.107), installed kernel 6.12.115. Run with `tests/vm/bin/runcase` (see `tests/vm/README.md`), checks with `tests/vm/checks.sh`.
 
-| # | Disks | Firmware | Encryption | Swap / LVM | Main focus |
-|---|-------|----------|------------|------------|------------|
-| 1 | 1 | UEFI (OVMF) | `luks` (default) | swap + LVM | default path, LUKS unlock via ZBM hooks, crypttab keyfile, LVM LUKS after root |
-| 2 | 1 | UEFI | `native` | swap + LVM | new pool-level encryption root, keysource, initramfs key hook, single prompt |
-| 3 | 1 | UEFI | `none` | swap + LVM | unencrypted swap fstab entry (was broken), single-disk LVM `pvs` (was broken) |
-| 4 | 2 | UEFI | `luks` | swap + LVM | ESP mdadm mirror, swap mirror, LVM mirror, mdadm.conf, one UEFI boot entry per disk |
-| 5 | 3 | UEFI | `luks` or `none` | swap + LVM | raidz pool, swap raid10, LVM raid5 |
-| 6 | 4 | UEFI | `none` | swap | mirrored vdev pairs (`zpool add` loop) |
-| 7 | 1 | legacy BIOS (SeaBIOS) | `luks` | swap | syslinux boot, no efivars, rEFInd moved from `EFI/BOOT` |
-| 8 | 1 | UEFI | any | – | step tags: `--tags create_pools` runs only that step + checks; `--tags bootstrap --skip-tags confirm_defaults`; untagged run does nothing |
+| # | Disks | Firmware | Encryption | Swap / LVM | Result | Fixes found |
+|---|-------|----------|------------|------------|--------|-------------|
+| 1 | 1 (scsi) | UEFI (OVMF) | `luks` | swap + LVM | pass | `121d4b7` live kernel headers, `e70f120` gsettings, `b968c2c` rEFInd default, `e2dc18b` step tags, `1747de5` unlock-luks |
+| 2 | 1 (scsi) | UEFI | `native` | swap + LVM | pass | `f5054da` native key initramfs hook |
+| 3 | 1 (virtio, no serial → by-path) | UEFI | `none` | swap + LVM | pass | `cda8d09` thin-provisioning-tools |
+| 4 | 2 | UEFI | `luks` | swap + LVM | pass | `d25bfd5` degraded md arrays, `1527840` crypttab nofail |
+| 5 | 3 | UEFI | `luks` | swap + LVM | pass | `f876186` rEFInd NVRAM (ESP corruption), `9500626` mdadm spares, `0cd9930` changed reports |
+| 6 | 4 | UEFI | `none` | swap | pass | – |
+| 7 | 1 | legacy BIOS (SeaBIOS) | `luks` | swap | pass | `57e66c0` stacked ESP mounts/mvrefind, `91706d4` syslinux default image |
+| 8 | 1 | UEFI | `none` | swap + LVM | pass | (`e2dc18b`) |
+| 9 | 4 | UEFI | `none`, raidz2 | swap | pass | – |
 
-Optional: 4 disks with `set_root_pool_type: {4: raidz2}` (pool creation for 4+ non-mirror disks was broken before).
+### Checks (all cases unless noted)
 
-### Checks after each run
-
-- [ ] Boots without intervention except **one** passphrase prompt (encrypted cases).
-- [ ] Dropbear: `ssh -p 222 root@<host>` at boot, `zbm`, passphrase, boots (cases 1, 2, 7).
-- [ ] `zpool status`, `zfs list`; native: `zfs get encryption,encryptionroot,keystatus -r rpool` (all datasets share encryption root `rpool`, keys available).
-- [ ] `lsinitramfs /boot/initrd.img-$(uname -r) | grep -E 'rpool.key|cryptsetup-keys'` (native: `etc/zfs/rpool.key`; luks: only `rpool.key`, not `pve.key`); image permissions `ls -l /boot/initrd.img-*` (0600).
-- [ ] `cat /proc/mdstat` and the `# BEGIN ANSIBLE MANAGED ARRAYS` block in `/etc/mdadm/mdadm.conf` (multi-disk).
-- [ ] `swapon --show`, `cat /etc/fstab /etc/crypttab` (no duplicate entries, swap present).
-- [ ] `vgs`, `lvs` (thin pool `pve/data`), `lsblk` (`crypt_lvm` opened after boot when encrypted).
-- [ ] `efibootmgr -v` (multi-disk UEFI: one `rEFInd <disk-id>` entry per disk); optionally remove one disk and boot.
-- [ ] `ifup --no-act -a` (no "misplaced option"), `cat /etc/hosts /etc/resolv.conf`.
-- [ ] `sshd -T | grep -iE 'passwordauth|permitroot|pubkey|usepam'` and `/etc/ssh/sshd_config.d/50-zfs_on_root.conf`.
-- [ ] `python3 -c 'import pexpect'` works; `/usr/lib/python3*/EXTERNALLY-MANAGED` still exists.
-- [ ] No dropbear service on the host: `systemctl status dropbear` (unit not found).
-- [ ] `zfs list -t snapshot` (`@base_install`, apt snapshots after `apt install`).
-- [ ] Rerun a step tag (e.g. `--tags config_swap`) on the installed system: no duplicate fstab/crypttab entries.
+- [x] One passphrase prompt (ZBM), the Debian initramfs unlocks with the embedded keyfile (luks: `cryptroot/keyfiles/<mapper>.key`, native: `etc/zfs/rpool.key`), initrd 0600. luks: no `pve.key` in the initramfs.
+- [x] Dropbear at boot (cases 1, 2, 4, 5, 7): luks with the new `unlock-luks`, native with `zbm`; the system boots afterwards.
+- [x] Native: all datasets share encryption root `rpool`, keys available, `org.zfsbootmenu:keysource` set.
+- [x] Pools: single, mirror, raidz1, mirrored vdev pairs (`mirror-0` + `mirror-1`), raidz2 on 4 disks.
+- [x] mdadm: ESP raid1 (metadata 1.0), swap raid1/raid10, LVM raid1/raid5, `ANSIBLE MANAGED ARRAYS` block, one `rEFInd <disk-id>` UEFI entry per disk.
+- [x] Disk removed (case 4): boots from the second disk, pool DEGRADED, md arrays started degraded after 30 s (after `d25bfd5`), no failed units.
+- [x] Swap (encrypted and plain, single and md), fstab/crypttab without duplicates; LVM thin pool `pve/data` active after boot.
+- [x] `ifup --no-act -a` clean, hosts/resolv.conf, sshd drop-in, pexpect + `EXTERNALLY-MANAGED`, no dropbear service, `@base_install` + apt snapshots.
+- [x] `apt-mark showhold` lists the grub packages (the `grub-*` glob works, see 3.4).
+- [x] Step tags (case 8): untagged run does nothing; `install-zfs-packages`, `clear_partition_tables_from_devices`, `create_partitions`, `create_pools` one after another run only their step + checks.
+- [x] Rerun on the installed system: phase-3 tags (`config_lvm`, `install_dropbear`) work, `changed=0` for `config_lvm` (after `0cd9930`).
+- [ ] Phase-2 tags (`config_swap`, ...) on the installed system: connect to port 8922 (live CD chroot sshd) and fail as unreachable. Decide: keep (fails safe, these steps partition/format) or switch the port to 22 when not on the live CD.
 
 ## 3. Noticed but left unchanged (possible later work)
 
@@ -55,7 +54,7 @@ Found during the review, deliberately not changed because they alter boot behavi
   1. Add `options "zbm.prefer=... ro loglevel=0"` to the custom menu entry and delete `refind_linux.conf.j2` + its task (one source of truth). Decide on `zbm.timeout` (20 s may be too long), and whether `zbm.import_policy=hostid zbm.set_hostid` are wanted (`spl_hostid` is already set per boot environment via `org.zfsbootmenu:commandline`).
   2. Drop the custom menu entry and `dont_scan_dirs`, and let rEFInd auto-detect ZBM with `refind_linux.conf` (loses the custom icon/title).
   3. Keep as is and only delete the unused template.
-- Related: the ZBM config (`templates/zfsbootmenu_config.yaml.j2`) has `Kernel: CommandLine: zbm.prefer=<pool> ro loglevel=0`, which only applies to EFI bundles (disabled, `EFI: Enabled: false`). The syslinux entry generated by `syslinux-update.sh` should be checked the same way.
+- Related: the ZBM config (`templates/zfsbootmenu_config.yaml.j2`) has `Kernel: CommandLine: zbm.prefer=<pool> ro loglevel=0`, which only applies to EFI bundles (disabled, `EFI: Enabled: false`). The syslinux entries generated by `syslinux-update.sh` have no `APPEND` line either (`ZBM_KCL_ARGS=""`), so legacy BIOS boots ZBM with its defaults as well. Confirmed in the VM tests: ZBM shows its default countdown (10 s) on both paths.
 
 ### 3.2 `rd.break` on the dropbear network command line
 
@@ -69,16 +68,23 @@ Found during the review, deliberately not changed because they alter boot behavi
 - What: virtio-blk (`vda`) has a dynamically assigned major number (often 252-254), so it is neither listed nor suggested. Device-mapper also uses a dynamic major, so simply adding 252/253 could list dm devices.
 - Options: select by `lsblk -ndo name,type,ro` with `TYPE == "disk"` (and excluding loop/sr/zram) instead of major numbers, or document "set `disk_devices` for virtio VMs" (current state, see the comment in `vars/main.yml`).
 
-### 3.4 GRUB hold with a glob
+### 3.4 GRUB hold with a glob (checked, works)
 
-- Where: `tasks/09_1_config_system.yml` "Run command to mark selected APT packages as hold" with `packages_to_mark_hold` (`grub-*`, `grub2`, `grub2-common`) from `vars/main.yml`, `ignore_errors: true`.
-- What: `apt-mark hold` may not expand `grub-*` and `grub2` does not exist in Debian. Errors are ignored, so it is unclear if anything is actually held.
-- To check: `apt-mark showhold` on an installed system. Then either list the real package names (`grub-common`, `grub-pc`, `grub-efi-amd64`, ...) with `ansible.builtin.dpkg_selections`, or use an apt preferences pin (`Pin-Priority: -1`) to prevent installation entirely.
+- `apt-mark showhold` on the installed test systems lists all `grub*` packages (`grub-common`, `grub-efi-amd64`, `grub-pc`, `grub2`, ...): `apt-mark hold` expands the glob against the package names. Nothing to change; `ignore_errors: true` could be dropped.
 
 ### 3.5 Remaining ansible-lint warnings
 
 - Cosmetic only: line length (> 160), comma alignment in a few loop lists, two `when: changed` tasks (`18_5` update-initramfs, `19` ssh restart) that could be handlers (they run on the installed system, so handlers would be safe there).
 - Two intentional `risky-shell-pipe` cases (`01_basic_checks.yml` by-path lookup with `| head -n1`, `15_unmount_chroot.yml` best-effort unmount): `pipefail` would break them; annotate with `noqa` if the warnings bother.
+
+### 3.6 No zstd on the target
+
+- `update-initramfs` warns `No zstd in /usr/bin:/sbin:/bin, using gzip`: Debian's default `COMPRESS=zstd`, but `zstd` is not installed on the new system. Adding `zstd` to `packages_standard` gives smaller/faster initramfs images.
+
+### 3.7 Test harness notes
+
+- The controller (Mac) must stay awake for the whole run; `tests/vm/bin/play` uses `caffeinate -i -s`. Without it the run stalls whenever macOS sleeps (looks like a hanging SSH connection).
+- Under SeaBIOS the live system waits at shutdown for "remove the live-medium and press ENTER" (live-boot). `tests/vm/iso/build.sh` now passes `noeject`; the ISO uploaded for these tests was built before that.
 
 ## 4. Fixes to port to `../ansible_deb_btrfs-on-root` (separate session)
 
@@ -94,6 +100,8 @@ Verified against the btrfs code on 2026-11-04. Commit hashes refer to this repos
 - [ ] **Empty LUKS list** (`tasks/04_clear_partition_tables.yml` line 34): `stdout | split('\n')` gives `['']` without LUKS containers. Use `stdout_lines | select | list`.
 - [ ] **sshd**: regex patching of `sshd_config` (`26_final_setup.yml` line 62) and the `sshd` alias (line 70, `handlers/main.yml`). Port the drop-in `/etc/ssh/sshd_config.d/50-*.conf` template gated by `update_sshd_settings` and use the `ssh` unit (`1c7f0e6`, `b9b0737`).
 - [ ] **PEP 668 hack** (`18_first_boot_prep.yml` lines 75-85): replace pip + deleting `EXTERNALLY-MANAGED` with the apt package `python3-pexpect` (`b9b0737`).
+- [ ] **LVM thin pool inactive after boot** (`tasks/22_config_LVM.yml` line 225 creates a thin pool): install `thin-provisioning-tools` (`thin_check`), otherwise the pool is not activated at boot without an encrypted LVM container (`cda8d09`).
+- [ ] **Useless gsettings task** (`tasks/03_install_btrfs_packages.yml`): runs as root, never affects the live user's GNOME session and fails on non-desktop ISOs; `do_ssh.sh` already disables automount. Remove it (`e70f120`).
 
 ### Improvements worth porting
 
@@ -106,7 +114,7 @@ Verified against the btrfs code on 2026-11-04. Commit hashes refer to this repos
 
 ### Latent (only once multi-disk support is added)
 
-- [ ] `11_config_boot_filesystem.yml` / `13_config_esp_filesystem.yml` line 55: `mdadm --examine --scan >> mdadm.conf` via `command` (no redirect) with a `creates` that always skips. Port the `mdadm --detail --scan` + `blockinfile` approach (`825753f`). Currently unreachable because `01_basic_checks.yml` rejects more than one disk.
+- [ ] `11_config_boot_filesystem.yml` / `13_config_esp_filesystem.yml` line 55: `mdadm --examine --scan >> mdadm.conf` via `command` (no redirect) with a `creates` that always skips. Port the `mdadm --detail --scan` + `blockinfile` approach (`825753f`). Currently unreachable because `01_basic_checks.yml` rejects more than one disk. Strip `spares=N` from the scan output (`9500626`) and don't combine `creates` with `changed_when: rc == 0` (`0cd9930`).
 
 ### Already fine in the btrfs role
 
