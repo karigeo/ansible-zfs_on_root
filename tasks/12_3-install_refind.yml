@@ -145,6 +145,17 @@
         line: 'default_selection "ZFSBootMenu"'
         state: present
 
+    # The shipped refind.conf has "use_nvram false": rEFInd then writes its variables
+    # (PreviousBoot, ...) to EFI/refind/vars on the ESP it booted from. With an mdadm
+    # mirrored ESP that write bypasses md, the FAT of that member diverges and later
+    # writes through md (e.g. generate-zbm) end up corrupted on it.
+    - name: Store rEFInd variables in NVRAM instead of on the ESP
+      ansible.builtin.lineinfile:
+        path: "{{ refind_path }}/refind.conf"
+        regexp: '^#?\s*use_nvram '
+        line: 'use_nvram true'
+        state: present
+
     - name: Configure display resolution for rEFInd
       ansible.builtin.lineinfile:
         path: "{{ refind_path }}/refind.conf"
