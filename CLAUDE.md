@@ -31,13 +31,13 @@ ansible-playbook -i inventory.yml ./playbook.yml -l <host> --tags "create_pools,
 
 Requirements: ansible-core >= 2.18 (`ansible.builtin.mount_facts`), collections `community.general`, `community.crypto`, `ansible.posix`. The target runs the Debian Live CD prepared with `files/do_ssh.sh` (user `ansible`, sudo, sshd, python3-pexpect).
 
-There are no automated tests. Useful local checks:
+There are no unit tests. Useful local checks:
 
 - `ansible-lint --offline -p .` (remaining warnings are mostly line length/alignment)
 - YAML parse of all files, `ansible-playbook --syntax-check` with a scratch playbook (includes are dynamic, so this only checks `tasks/main.yml`)
 - Render templates / var expressions with a scratch playbook against `localhost` that loads `vars/main.yml` and `defaults/main.yml` via `vars_files` (pass overrides with `-e`, play vars lose against `vars_files`)
 
-Real verification needs a VM (e.g. on Proxmox) booted from the Debian Live ISO.
+Real verification needs a VM booted from the Debian Live ISO. `tests/vm/` runs the test matrix of `NEXT_STEPS.md` unattended on a Proxmox VM (API token limited to that VM, prepared live ISO, console/dropbear unlock); local settings and secrets live in `~/.config/claude-zfs-test`, see `tests/vm/README.md`. The controller must not sleep during a run (`bin/play` uses `caffeinate`).
 
 ## Architecture
 

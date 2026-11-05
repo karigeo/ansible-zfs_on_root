@@ -1,0 +1,3 @@
+# 2 disks, UEFI, LUKS, swap + LVM (ESP/swap/LVM mdadm mirrors)
+disk_devices: [sda, sdb]
+disk_encryption_type: luks

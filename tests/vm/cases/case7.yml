@@ -1,0 +1,5 @@
+# 1 disk, legacy BIOS (SeaBIOS), LUKS, swap only (syslinux)
+disk_devices: [sda]
+disk_encryption_type: luks
+create_lvm_partition: false
+root_partition_size: "0"

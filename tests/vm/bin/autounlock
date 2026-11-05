@@ -1,0 +1,38 @@
+#!/bin/bash
+# Handles the passphrase prompts of an encrypted test run.
+# Usage: autounlock <playbook log> <luks|native>
+# 1st reboot: types the passphrase on the VM console (no dropbear yet).
+# 2nd reboot: finds dropbear (port 222, ZBM gets its own DHCP lease) and unlocks
+#             over SSH (luks: unlock-luks, native: zbm via zbm-remote).
+. "$(dirname "$0")/common.sh"
+L=$1; MODE=$2; PW=$TEST_PASSPHRASE
+B=$(dirname "$0"); SHOTS=$(dirname "$L")/$(basename "$L" .log)-shots; mkdir -p "$SHOTS"
+log() { echo "$(date +%H:%M:%S) $*"; }
+pause() { local t; t=$(date +%s); while [ $(( $(date +%s) - t )) -lt "$1" ]; do sleep 5; done; }
+wait_reboots() {
+  until [ "$(grep -c 'Commencing Reboot' "$L")" -ge "$1" ] || grep -q 'PLAY RECAP' "$L"; do sleep 5; done
+  grep -q 'PLAY RECAP' "$L" && { log "playbook ended"; exit 0; }
+}
+wait_down() { until ! nc -z -G2 -w2 "$VM_IP" 22 2>/dev/null; do sleep 2; done; }
+
+wait_reboots 1; wait_down; log "1st reboot: VM down"
+pause 45
+"$B/pvecon" shot "$SHOTS/reboot1-prompt.png" >/dev/null 2>&1
+"$B/pvecon" type "$PW" 2>/dev/null; "$B/pvecon" key enter 2>/dev/null; log "1st reboot: passphrase typed on console"
+pause 40
+"$B/pvecon" shot "$SHOTS/reboot1-after.png" >/dev/null 2>&1; log "1st reboot: screenshots in $SHOTS"
+
+wait_reboots 2; wait_down; log "2nd reboot: VM down"
+ip=""; end=$(( $(date +%s) + 300 ))
+while [ -z "$ip" ] && [ "$(date +%s)" -lt $end ]; do
+  sleep 5
+  ip=$(for i in $(seq 2 254); do (nc -z -G1 -w1 "$VM_SCAN_NET.$i" 222 2>/dev/null && echo "$VM_SCAN_NET.$i") & done; wait)
+done
+[ -n "$ip" ] || { log "2nd reboot: dropbear not found"; "$B/pvecon" shot "$SHOTS/reboot2-nodropbear.png" >/dev/null 2>&1; exit 1; }
+ip=$(echo "$ip" | head -1); log "2nd reboot: dropbear at $ip"
+if [ "$MODE" = luks ]; then
+  printf '%s\n' "$PW" | "$B/vmssh" -p 222 "root@$ip" unlock-luks
+else
+  "$B/zbm-remote" "$ip" "$PW" | tail -3
+fi
+log "2nd reboot: unlock sent (exit $?)"

@@ -68,3 +68,6 @@ ansible.cfg
 .ansible/
 .vscode/
 .claude/
+# VM test harness (tests/vm/README.md): its playbook and config are part of the repo
+!tests/vm/playbook.yml
+!tests/vm/ansible.cfg

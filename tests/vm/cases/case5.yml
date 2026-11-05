@@ -1,0 +1,3 @@
+# 3 disks, UEFI, LUKS, swap + LVM (raidz, swap raid10, LVM raid5)
+disk_devices: [sda, sdb, sdc]
+disk_encryption_type: luks

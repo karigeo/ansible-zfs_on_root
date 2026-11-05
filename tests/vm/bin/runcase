@@ -1,0 +1,17 @@
+#!/bin/bash
+# Runs one test case: fresh VM, wait for the live system, playbook (the Mac is kept
+# awake with caffeinate), autounlock for encrypted cases.
+# Usage: runcase <case number> <disks> <ovmf|seabios> <scsi|virtio> <none|luks|native>
+set -euo pipefail
+. "$(dirname "$0")/common.sh"
+N=$1; DISKS=$2; FW=$3; BUS=$4; ENC=$5
+B=$(cd "$(dirname "$0")" && pwd); L=$LOGS/case$N.log
+[ -e "$L" ] && mv "$L" "$LOGS/case$N-$(date +%H%M%S).log"
+"$B/vmprep" "$DISKS" "$FW" "$BUS"
+"$B/waitssh" live 900
+nohup "$B/play" "$N" --tags bootstrap --skip-tags confirm_defaults > "$L" 2>&1 &
+sleep 2
+if [ "$ENC" != none ]; then
+  nohup "$B/autounlock" "$L" "$ENC" > "$LOGS/case$N-autounlock.log" 2>&1 &
+fi
+echo "case $N started: $L"

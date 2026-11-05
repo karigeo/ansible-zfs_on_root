@@ -1,0 +1,8 @@
+#!/bin/bash
+# ansible-playbook for the test VM with a case file; keeps the Mac awake while it runs.
+# Usage: play <case number> [ansible-playbook options...]
+. "$(dirname "$0")/common.sh"
+N=$1; shift
+export ANSIBLE_CONFIG=$TESTS_VM/ansible.cfg ANSIBLE_PRIVATE_KEY_FILE=$TEST_KEY
+exec caffeinate -i -s ansible-playbook -i "$ZFS_TEST_DIR/inventory.yml" "$TESTS_VM/playbook.yml" \
+  -e "@$TESTS_VM/cases/case$N.yml" "$@"

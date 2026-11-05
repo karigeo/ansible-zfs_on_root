@@ -1,0 +1,49 @@
+---
+# Test VM (copy to $ZFS_TEST_DIR/inventory.yml and adapt). Case specific settings
+# (disks, encryption, swap/LVM) come from cases/caseN.yml via -e @cases/caseN.yml.
+zfs_test:
+  hosts:
+    zfs-testvm:
+      ansible_host: 192.168.100.33
+      ansible_user: ansible
+      host_name: zfs-testvm
+      domain_name: example.lan
+
+      # Throwaway passphrase, only for the test VM
+      passphrase: "zfs-test-Passphrase1"
+      prompt_for_zfs_passphrase: false
+
+      # 15 GB disks: ESP 512M + swap 1G (512M each with 3+ disks) + root 8G + LVM rest (~5G)
+      root_partition_size: "+8G"
+      single_or_mirror_swap_partition_size_mb: "1024"
+      raidz_swap_partition_size_mb: "512"
+      single_or_mirror_lvm_partition_size: "0"
+      raidz_lvm_partition_size: "0"
+
+      ipv4:
+        interfaces:
+          - name: ens18
+            address_type: manual
+            network_address: none
+            gateway: none
+        bridges:
+          - name: vmbr0
+            address_type: static
+            network_address: "192.168.100.33/24"
+            gateway: 192.168.100.1
+            bridge_ports:
+              - ens18
+            vlan_aware: true
+            bridge_vids: "2-4094"
+        dns_nameserver: 192.168.100.1
+        dns_search_domain: example.lan
+
+      enable_dropbear_support: true
+      apply_dropbear_settings:
+        remoteaccess_device: ens18
+        remoteaccess_ip_config: "dhcp"   # DHCP reservation 192.168.100.33 for the VM MAC
+        remoteaccess_ip: "192.168.100.33"
+        remoteaccess_netmask: "255.255.255.0"
+        remoteaccess_gateway: "192.168.100.1"
+        public_key_for_dropbear:
+          - "<contents of $ZFS_TEST_DIR/id_ed25519.pub>"
