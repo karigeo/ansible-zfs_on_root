@@ -39,7 +39,9 @@
       ansible.builtin.blockinfile:
         path: /etc/mdadm/mdadm.conf
         marker: "# {mark} ANSIBLE MANAGED ARRAYS"
-        block: "{{ mdadm_scan.stdout }}"
+        # A new raid5 lists a "spare" until its initial build is done; recording
+        # spares=N then triggers a SparesMissing alert on every boot
+        block: "{{ mdadm_scan.stdout | regex_replace(' spares=[0-9]+', '') }}"
       register: mdadm_conf
 
     - name: Update initramfs to include the new mdadm.conf
