@@ -104,6 +104,18 @@
       when:
         - disk_by_id | length | int > 1
 
+    # With a missing disk the initramfs leaves the arrays inactive and nothing starts
+    # them degraded (root is on ZFS); see files/initramfs-mdadm-release-inactive
+    - name: Install initramfs script that releases inactive mdadm arrays
+      ansible.builtin.copy:
+        src: initramfs-mdadm-release-inactive
+        dest: /etc/initramfs-tools/scripts/init-bottom/mdadm-release-inactive
+        owner: root
+        group: root
+        mode: '0755'
+      when:
+        - disk_by_id | length | int > 1
+
     # Picks up mdadm.conf, crypttab and initramfs module changes made after the ZBM step
     - name: Update initramfs
       ansible.builtin.command:

@@ -1,0 +1,28 @@
+#!/bin/sh
+# initramfs-tools init-bottom script (ansible-zfs_on_root).
+#
+# udev in the initramfs assembles md arrays incrementally. If a disk is missing
+# they stay inactive, and nothing in the initramfs starts them: root is on ZFS,
+# so the degraded handling of the mdadm local-block script never runs, and the
+# initramfs has no systemd for mdadm-last-resort@.timer. Stop such inactive
+# arrays before switching to the real root: udev there assembles them again and
+# mdadm-last-resort@.timer starts them degraded after 30 seconds.
+PREREQ=""
+prereqs() {
+  echo "$PREREQ"
+}
+case "$1" in
+  prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+for state in /sys/block/md*/md/array_state; do
+  [ -r "$state" ] || continue
+  [ "$(cat "$state")" = "inactive" ] || continue
+  md=${state#/sys/block/}
+  md=${md%%/*}
+  mdadm --stop "/dev/$md" >/dev/null 2>&1 || true
+done
+exit 0

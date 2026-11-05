@@ -17,6 +17,7 @@ _NOTE: This Ansible role is not structured as rigid as a typical Ansible role sh
   * Automatic snapshot creation upon apt/dpkg install or remove
 * No GRUB Boot Loader!
 * All ESP (boot) partitions are an `mdadm` mirror across all devices, each disk gets its own UEFI boot entry
+* Multi-disk systems boot with a missing disk: the pool imports degraded and the `mdadm` arrays (ESP, swap, LVM) are started degraded after 30 seconds
 * No separation of `bpool` and `rpool`, just a single `rpool` is needed
 * Predefined rules for ZFS root pool types (mirror, raidz1, raidz2, multiple mirror vdevs) based on number of devices available
 * Swap partitions can be enabled
