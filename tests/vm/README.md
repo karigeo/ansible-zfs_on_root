@@ -103,6 +103,7 @@ bin/vmssh ansible@<vm ip> 'sudo bash -s' < checks.sh
 | 7 | `runcase 7 1 seabios scsi luks` |
 | 8 | `vmprep 1 ovmf scsi`, `waitssh live`, then `tagrun <name> [--tags ...]` |
 | 9 | `runcase 9 4 ovmf scsi none` (raidz2) |
+| 10 | Reinstall: `runcase 10 2 ovmf scsi none`; on the installed system `efibootmgr -n <DVD entry>` and reboot (live CD once, EFI vars and disks stay), `waitssh live`, `play 10 --tags bootstrap --skip-tags confirm_defaults` |
 
 Disk failure test (multi-disk): power off, `pve PUT /nodes/{node}/qemu/{vmid}/config delete=scsi0 'boot=order=scsi1;ide2'`, start.
 

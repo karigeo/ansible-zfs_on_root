@@ -1,0 +1,4 @@
+# Reinstall: 2 disks, UEFI, no encryption, installed twice on the same disks
+# and EFI vars disk (stale UEFI boot entries of the first install)
+disk_devices: [sda, sdb]
+disk_encryption_type: none

@@ -26,6 +26,7 @@ Proxmox VM (q35, 15 GB disks), Debian Live 13.7.0 standard (kernel 6.12.107), in
 | 7 | 1 | legacy BIOS (SeaBIOS) | `luks` | swap | pass | `57e66c0` stacked ESP mounts/mvrefind, `91706d4` syslinux default image |
 | 8 | 1 | UEFI | `none` | swap + LVM | pass | (`e2dc18b`) |
 | 9 | 4 | UEFI | `none`, raidz2 | swap | pass | – |
+| 10 | 2, reinstalled on the same disks and EFI vars | UEFI | `none` | swap + LVM | pass | `155b9f9` stale UEFI boot entries |
 
 ### Checks (all cases unless noted)
 
@@ -34,6 +35,7 @@ Proxmox VM (q35, 15 GB disks), Debian Live 13.7.0 standard (kernel 6.12.107), in
 - [x] Native: all datasets share encryption root `rpool`, keys available, `org.zfsbootmenu:keysource` set.
 - [x] Pools: single, mirror, raidz1, mirrored vdev pairs (`mirror-0` + `mirror-1`), raidz2 on 4 disks.
 - [x] mdadm: ESP raid1 (metadata 1.0), swap raid1/raid10, LVM raid1/raid5, `ANSIBLE MANAGED ARRAYS` block, one `rEFInd <disk-id>` UEFI entry per disk.
+- [x] Reinstall (case 10, 2026-11-06): with the old code the entries of the first install were kept (same label) while pointing to the old partition GUIDs, and with the disks first in the boot order the VM fell through to the live CD. OVMF then deleted the dead entries itself; other firmware may keep them. With `155b9f9` (run once from hand-made stale entries incl. an inactive duplicate, once as the documented reinstall): old entries deleted, one new entry per disk with the new GUID, boots from `rpool`, checks clean. Single disk not affected (refind-install matches loader path and partition GUID), but its dead entry from the previous install stays in NVRAM.
 - [x] Disk removed (case 4): boots from the second disk, pool DEGRADED, md arrays started degraded after 30 s (after `d25bfd5`), no failed units.
 - [x] Swap (encrypted and plain, single and md), fstab/crypttab without duplicates; LVM thin pool `pve/data` active after boot.
 - [x] `ifup --no-act -a` clean, hosts/resolv.conf, sshd drop-in, pexpect + `EXTERNALLY-MANAGED`, no dropbear service, `@base_install` + apt snapshots.
