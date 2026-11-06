@@ -88,12 +88,12 @@ Found during the review, deliberately not changed because they alter boot behavi
 - The controller (Mac) must stay awake for the whole run; `tests/vm/bin/play` uses `caffeinate -i -s`. Without it the run stalls whenever macOS sleeps (looks like a hanging SSH connection).
 - Under SeaBIOS the live system waits at shutdown for "remove the live-medium and press ENTER" (live-boot). `tests/vm/iso/build.sh` now passes `noeject`; the ISO uploaded for these tests was built before that.
 
-### 3.8 Stale UEFI boot entries after a multi-disk reinstall
+### 3.8 Stale UEFI boot entries after a multi-disk reinstall (fixed in `155b9f9`)
 
-- Where: `tasks/12_3-install_refind.yml`, "Create a rEFInd UEFI boot entry for every disk" (UEFI, 2+ disks).
-- What: an entry is only created if no entry with the label `rEFInd <disk-id>` exists yet. The entry points to the ESP by its partition GUID (`HD(1,GPT,<partuuid>,...)`). A reinstall repartitions the disks (`sgdisk --zap-all/--clear`, then new partitions with new GUIDs), but the old entries with the same labels stay in NVRAM, so the role skips them and they point to partitions that no longer exist. Firmware then falls through its boot order: OVMF ends up in the UEFI shell, which runs `startup.nsh` and starts rEFInd (so a VM may still boot); firmware without that fallback shows "no bootable device" (like the Minisforum case in `docs/uefi-bugs-issues.md`).
-- Untested: `tests/vm/bin/vmprep` recreates `efidisk0` for every case, so NVRAM is always empty. Also unchecked: whether `refind-install` (single disk) replaces its own stale entry.
-- Fix options: match existing entries on label and partition GUID (`blkid -s PARTUUID -o value <disk>-part1`, compare with `efibootmgr -v`), or delete all `rEFInd <disk-id>` entries of the target disks before creating new ones (`efibootmgr -b <num> -B`). Test: run a multi-disk case twice on the same VM without `vmprep`, check `efibootmgr -v` and boot with the UEFI shell removed from the boot order.
+- Where: `tasks/12_3-install_refind.yml`, "Create a rEFInd UEFI boot entry for every disk, replacing old ones" (UEFI, 2+ disks).
+- What was wrong: an entry was only created if no entry with the label `rEFInd <disk-id>` existed yet. The entry points to the ESP by its partition GUID (`HD(1,GPT,<partuuid>,...)`), and a reinstall repartitions the disks, so the old entries were kept while pointing to partitions that no longer exist. Firmware then fell through its boot order (on the VM to the live CD); firmware without such a fallback shows "no bootable device" (like the Minisforum case in `docs/uefi-bugs-issues.md`).
+- Fix: all entries with the disk's label (active or not) are deleted, then a new one is created per disk.
+- Tested with case 10 (see section 2 and its "Reinstall" check). Single disk is not affected: `refind-install` matches its entry on loader path and partition GUID and creates a new one; the dead entry of the previous install stays in NVRAM.
 
 ## 4. Fixes to port to `../ansible_deb_btrfs-on-root` (separate session)
 
