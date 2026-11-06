@@ -88,6 +88,13 @@ Found during the review, deliberately not changed because they alter boot behavi
 - The controller (Mac) must stay awake for the whole run; `tests/vm/bin/play` uses `caffeinate -i -s`. Without it the run stalls whenever macOS sleeps (looks like a hanging SSH connection).
 - Under SeaBIOS the live system waits at shutdown for "remove the live-medium and press ENTER" (live-boot). `tests/vm/iso/build.sh` now passes `noeject`; the ISO uploaded for these tests was built before that.
 
+### 3.8 Stale UEFI boot entries after a multi-disk reinstall
+
+- Where: `tasks/12_3-install_refind.yml`, "Create a rEFInd UEFI boot entry for every disk" (UEFI, 2+ disks).
+- What: an entry is only created if no entry with the label `rEFInd <disk-id>` exists yet. The entry points to the ESP by its partition GUID (`HD(1,GPT,<partuuid>,...)`). A reinstall repartitions the disks (`sgdisk --zap-all/--clear`, then new partitions with new GUIDs), but the old entries with the same labels stay in NVRAM, so the role skips them and they point to partitions that no longer exist. Firmware then falls through its boot order: OVMF ends up in the UEFI shell, which runs `startup.nsh` and starts rEFInd (so a VM may still boot); firmware without that fallback shows "no bootable device" (like the Minisforum case in `docs/uefi-bugs-issues.md`).
+- Untested: `tests/vm/bin/vmprep` recreates `efidisk0` for every case, so NVRAM is always empty. Also unchecked: whether `refind-install` (single disk) replaces its own stale entry.
+- Fix options: match existing entries on label and partition GUID (`blkid -s PARTUUID -o value <disk>-part1`, compare with `efibootmgr -v`), or delete all `rEFInd <disk-id>` entries of the target disks before creating new ones (`efibootmgr -b <num> -B`). Test: run a multi-disk case twice on the same VM without `vmprep`, check `efibootmgr -v` and boot with the UEFI shell removed from the boot order.
+
 ## 4. Fixes to port to `../ansible_deb_btrfs-on-root` (separate session)
 
 Verified against the btrfs code on 2026-11-04. Commit hashes refer to this repository.
@@ -104,6 +111,8 @@ Verified against the btrfs code on 2026-11-04. Commit hashes refer to this repos
 - [ ] **sshd**: regex patching of `sshd_config` (`26_final_setup.yml` line 62) and the `sshd` alias (line 70, `handlers/main.yml`). Port the drop-in `/etc/ssh/sshd_config.d/50-*.conf` template gated by `update_sshd_settings` and use the `ssh` unit (`1c7f0e6`, `b9b0737`).
 - [ ] **PEP 668 hack** (`18_first_boot_prep.yml` lines 75-85): replace pip + deleting `EXTERNALLY-MANAGED` with the apt package `python3-pexpect` (`b9b0737`).
 - [ ] **LVM thin pool inactive after boot** (`tasks/22_config_LVM.yml` line 225 creates a thin pool): install `thin-provisioning-tools` (`thin_check`), otherwise the pool is not activated at boot without an encrypted LVM container (`cda8d09`).
+- [ ] **Missing secrets file breaks every run** (`tasks/main.yml` line 18): `include_vars` of the gitignored `secrets/main.yml` fails on a fresh clone. Load `{{ role_path }}/secrets/main.yml` only if it `is file` (`97b4f37`).
+- [ ] **ansible user with password "ansible"** (`tasks/09_0_config_system.yml` line 181): `echo "ansible:ansible" | chpasswd` in the new system, valid until final_setup while sshd allows password logins. Use `usermod -p "*" ansible` and drop the later disable task (`619db90`).
 - [ ] **Useless gsettings task** (`tasks/03_install_btrfs_packages.yml`): runs as root, never affects the live user's GNOME session and fails on non-desktop ISOs; `do_ssh.sh` already disables automount. Remove it (`e70f120`).
 
 ### Improvements worth porting

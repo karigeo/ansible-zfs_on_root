@@ -144,7 +144,8 @@
           apt_https_proxy is defined
 
     # The chroot phase connects as "ansible" with the same UID and SSH key as on
-    # the live system. The password is disabled in final_setup.
+    # the live system. The user gets no usable password ("*"): SSH key login and
+    # passwordless sudo only, also on the installed system before final_setup.
     - name: Get UID of the ansible user on the live system
       ansible.builtin.getent:
         database: passwd
@@ -168,12 +169,11 @@
     - name: Add ansible user to chroot environment
       ansible.builtin.command:
         cmd: "{{ chroot_cmd }} bash -c '{{ item }}'"
-      no_log: true
       register: cmd_output
       changed_when: cmd_output.rc == 0
       with_items:
         - "useradd -G sudo -u {{ getent_passwd['ansible'].1 }} -s /bin/bash --create-home --home-dir /home/ansible ansible"
-        - "echo \"ansible:ansible\" | chpasswd"
+        - "usermod -p \"*\" ansible"
         - "echo \"ansible ALL=(ALL) NOPASSWD:ALL\" > {{ sudoers_include_file }}"
 
     # Same host keys as the live system, so the chroot connection and later

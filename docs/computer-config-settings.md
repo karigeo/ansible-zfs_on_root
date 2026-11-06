@@ -4,7 +4,10 @@
 
 ## UEFI or Legacy BIOS
 
-It does not matter if UEFI or legacy BIOS is used. UEFI is used when the live CD was booted in UEFI mode (`/sys/firmware/efi` exists), otherwise legacy BIOS. rEFInd (UEFI) and syslinux (legacy BIOS) are both installed on the ESP, so you can switch between both modes later.
+Both are supported. The mode is taken from the live CD: UEFI if it was booted in UEFI mode (`/sys/firmware/efi` exists), otherwise legacy BIOS. rEFInd (UEFI) and syslinux (legacy BIOS, boot code in the protective MBR of every disk) are both installed on the ESP in either mode.
+
+* The UEFI boot entries are only created when installing in UEFI mode. After installing in legacy BIOS mode, switching to UEFI needs a boot entry for `\EFI\refind\refind_x64.efi` (see [UEFI BIOS Bugs / Glitches / Issues](uefi-bugs-issues.md)). Multi-disk installs also get `startup.nsh` on the ESP, which the UEFI shell runs to start rEFInd.
+* Only the boot mode used for the installation is covered by the VM tests.
 
 ## Default Domain Name
 
@@ -32,7 +35,9 @@ refind_theme_name: refind-ambience
 refind_theme_repo: https://github.com/karigeo/refind-ambience
 ```
 
-The theme repository must contain a `theme.conf` (included from `refind.conf`) and the icon `icons/os_proxmox.png`, which is used for the ZFSBootMenu entry.
+The theme repository is cloned from its `master` branch. It must contain a `theme.conf` (included from `refind.conf`) and the icon `icons/os_proxmox.png`, which is used for the ZFSBootMenu entry. With `refind_theming: false` the default rEFInd look is used.
+
+The ZFSBootMenu entry is the rEFInd default (`default_selection`). The ZFSBootMenu directory is not scanned by rEFInd (`refind_no_scan_dirs`), so it shows up only once.
 
 ## Locale, Timezone and Keyboard
 
@@ -83,13 +88,15 @@ ipv4:
   dns_search_domain: my.do.main   # "none" to omit the search line
 ```
 
+* `address_type` is `manual` (no address, e.g. a bridge port), `static` (needs `network_address` in CIDR notation and `gateway`) or `dhcp`.
 * `ipv4.interfaces` must list at least one interface. The first one is also the default Dropbear device.
+* Ansible reconnects to the same address after the first reboot, so the new system must come up with the address the live CD had (static address or DHCP reservation).
 * `/etc/hosts` gets the first static address (bridges first), otherwise the live system's address.
 * Use `bridges: []` for a plain host without bridges.
 
 ## Disable IPv6 Networking
 
-By default IPv6 networking will be disabled. If you need it, set `ipv6.disable: false`. You can also customize which settings are applied and how they are applied.
+By default IPv6 networking will be disabled (in `final_setup`, tag `disable_ipv6`). If you need it, set `ipv6.disable: false`. The `disable_settings` lines are added to `conf_file` and applied with `apply_cmd <conf_file>`.
 
 ```yaml
 ipv6:
@@ -104,7 +111,7 @@ ipv6:
 
 ## Installed Packages
 
-A minimal server package set (`packages_standard` in `vars/main.yml`) is installed in `final_setup`. Additional packages can be defined in `defaults/main.yml`:
+A minimal server package set (`packages_standard` in `vars/main.yml`, with recommends) is installed in `final_setup`. Additional packages (installed without recommends) can be defined in `defaults/main.yml`:
 
 ```yaml
 # Additional packages to install once the build has completed

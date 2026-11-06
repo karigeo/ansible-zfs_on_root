@@ -65,8 +65,8 @@ if [[ ! -p /dev/stdin ]]; then
   echo "Enter a temporary password for Ansible account. You will be prompted for this"
   echo "password when you attempt to push a generated SSH key to this account."
   echo
-  echo "When installation is complete, the Ansible account will be password disabled,"
-  echo "Only SSH key based login will be allowed."
+  echo "The password only exists on this live CD. The Ansible account of the new"
+  echo "system has no password, only SSH key based login is allowed."
   echo
   sudo passwd $ANSIBLE_USER
   while [ $? -ne 0 ]; do

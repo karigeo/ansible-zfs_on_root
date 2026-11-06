@@ -17,7 +17,7 @@
           {% endif %}
 
           * Root password is now expired.
-          * Ansible password is disabled, only SSH key connection allowed.
+          * The ansible user has no password, only SSH key connection allowed.
           * ZFS Snapshots for apt and dpkg are enabled.
           * ZFS snapshot for base installation "@base_install" created.
 

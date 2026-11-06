@@ -2,21 +2,19 @@
 
 > This Role is a modified version of [reefland/ansible-zfs_on_root](https://github.com/reefland/ansible-zfs_on_root)
 
-This Ansible role is used to setup / bootstrap a Debian 13 system with ZFS as root filesystem and ZFSBootMenu as Bootloader. It is mainly intended as base for a Proxmox VE host installed on top, but also works for a "normal" Debian host.
-
-_NOTE: This Ansible role is not structured as rigid as a typical Ansible role should be. Tips and suggestions on how to improve this are welcomed._
+This Ansible role installs Debian 13 with ZFS as root filesystem and ZFSBootMenu as boot loader. It is mainly intended as base for a Proxmox VE host installed on top, but also works for a "normal" Debian host.
 
 ---
 
-## Features:
+## Features
 
 * Uses ZFSBootMenu / rEFInd / Syslinux to manage boot environments
   * rEFInd provides a graphical boot loader menu on UEFI systems
   * Syslinux provides a boot loader menu for Legacy BIOS systems
   * ZFSBootMenu provides menu driven roll-back to previous ZFS snapshots and kernels
-  * Automatic snapshot creation upon apt/dpkg install or remove
+  * Automatic snapshot of the root dataset before every `apt`/`dpkg` run
 * No GRUB Boot Loader!
-* All ESP (boot) partitions are an `mdadm` mirror across all devices, each disk gets its own UEFI boot entry
+* Multi-disk systems: the ESP (boot) partitions form an `mdadm` mirror across all disks, and on UEFI each disk gets its own boot entry
 * Multi-disk systems boot with a missing disk: the pool imports degraded and the `mdadm` arrays (ESP, swap, LVM) are started degraded after 30 seconds
 * No separation of `bpool` and `rpool`, just a single `rpool` is needed
 * Predefined rules for ZFS root pool types (mirror, raidz1, raidz2, multiple mirror vdevs) based on number of devices available
@@ -25,7 +23,7 @@ _NOTE: This Ansible role is not structured as rigid as a typical Ansible role sh
   * If encryption is enabled, swap is encrypted with a random key on every boot
 * Optional LVM partition (e.g. for Proxmox VE `lvmthin` storage), `mdadm` based on multiple disks
 * Encryption: ZFS in LUKS containers or ZFS native encryption (single encryption root), one passphrase prompt at boot
-* UEFI and Legacy Booting supported (can even switch between them)
+* UEFI and Legacy BIOS booting supported (both boot loaders are installed)
 * Customized SSH Configuration Options
 * Dropbear support for entering the passphrase remotely at boot
 * Support for Apt-Cacher-NG proxy for cached packages
@@ -34,31 +32,27 @@ _NOTE: This Ansible role is not structured as rigid as a typical Ansible role sh
 
 ## TL;DR
 
-* This is a WORK IN PROGRESS:
-  * Not every combination has been tested. If you find a problem, please open a GitHub issue in this repository.
-  * Review [known issues](README.md#known-issues) for workarounds.
-
-* This Ansible based process is intended to be used against bare-metal systems or virtual machines (just needs SSH access to get started).
-  * This is intended for initial installation ONLY, this is not for applying changes over time -- you should make those changes via some other playbook / change control system.
-* This process uses ENTIRE disk(s) and wipes partitions on the specified disks, any existing data on these partitions on the target system will be lost.
-* Review the `defaults/main.yml` to set temporary passwords, basic rules on partition sizes, swap partitions, encryption, network, etc.
+* The role is intended for bare-metal systems or virtual machines booted from a Debian Live CD (it just needs SSH access to get started).
+* This is for the initial installation ONLY, not for applying changes over time -- make those changes via some other playbook / change control system.
+* This process uses ENTIRE disk(s) and wipes partitions on the specified disks, any existing data on these disks will be lost.
+* Review `defaults/main.yml` to set the temporary root password, partition sizes, swap, encryption, network, etc.
 * Builds a headless server environment.
+* Not every combination of settings has been tested. If you find a problem, please open a GitHub issue in this repository, and see [Known Issues](#known-issues) for workarounds.
 
 ---
 
 ## Environments Tested
 
-* Debian 13 / Trixie
+* Debian 13 / Trixie, installed from the Debian Live 13 "standard" ISO.
+* A test matrix (single disk to 4 disks, UEFI and legacy BIOS, `luks` / `native` / no encryption, swap and LVM, Dropbear unlock, booting with a missing disk) runs unattended on a Proxmox VM, see [`tests/vm/README.md`](tests/vm/README.md). The results are in [`NEXT_STEPS.md`](NEXT_STEPS.md).
 
 ---
 
 ## Requirements
 
 * [Ansible](https://www.ansible.com/) Core 2.18 or newer with the collections `community.general`, `community.crypto` and `ansible.posix`
-* [Debian 13 "Trixie" Live CD](https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/) (Desktop - DO NOT use standard images)
-  * _NOTE: the installed system is command-line only, even when using the desktop image._
-* Computers that have less than 2 GiB of memory run ZFS slowly. 4 GiB of memory is recommended for normal performance in basic workloads.
-* Besides that, I had issues running this playbook on a VPS with only 4GiB of memory
+* [Debian 13 "Trixie" Live CD](https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/), the "standard" (command-line) image is enough. A desktop image works as well; the installed system is command-line only either way.
+* Memory: ZFS runs slowly with less than 2 GiB, 4 GiB or more are recommended. Running this playbook on a VPS with only 4 GiB of memory caused issues.
 
 ## Caution
 
@@ -70,7 +64,7 @@ _NOTE: This Ansible role is not structured as rigid as a typical Ansible role sh
 
 ## What is rEFInd and ZFSBootMenu?
 
-**rEFInd** is a graphical boot manager replacement used instead of GRUB. GRUB is not ZFS aware.
+**rEFInd** is a graphical boot manager used instead of GRUB. GRUB only supports a subset of ZFS features (and no ZFS native encryption), so it is not used at all.
 
 ![rEFInd Boot Menu Image](./docs/refind_boot_menu.png)
 
@@ -81,21 +75,21 @@ _NOTE: This Ansible role is not structured as rigid as a typical Ansible role sh
 ![ZFS Boot Menu Image](./docs/zfsbootmenu.png)
 
 * Can browse, clone and promote ZFS snapshots to new boot environments.
-* Snapshots will automatically be taken before each `apt` or `dpkg` update.
+* A snapshot of the root dataset (`rpool/ROOT/pve-1@apt_<date>`) is taken before every `apt` or `dpkg` run that installs, upgrades or removes packages. The installation itself ends with the snapshot `@base_install`.
 
 ---
 
 ## WHY use THIS?
 
-Besides being handy to have a repeatable installation possibility the manual process of installing a Debian system with ZFS on root is rather cumbersome. With Proxmox in mind, this gives the ability to have an enhanced partition layout and also be able to have an encrypted root without using the ZFS native encryption, which brings problems with ZFS replication.
+Besides being a repeatable installation, it saves the rather cumbersome manual process of installing a Debian system with ZFS on root. With Proxmox in mind, it gives an enhanced partition layout and an encrypted root without ZFS native encryption, which brings problems with ZFS replication.
 
 ### Configurable Rules
 
 This provides a configurable way to define how the ZFS installation will look like and allows for complex topologies.
 
 * For example:
-  * If you always want a 3 disk setup to be a _raidz_ root pool, but a 4 disk setup should use multiple _mirrored_ vdev based root pool you can define these defaults.
-* The size of swap partitions can be defined to a standard value for single device and mirrored setups or a different value for raidz setup.
+  * If you always want a 3 disk setup to be a _raidz_ root pool, but a 4 disk setup should use multiple _mirrored_ vdevs, you can define these defaults.
+* The swap partition size can be set to one value for one or two disks and to another value (per disk) for three or more disks.
 * UEFI Booting is automatically enabled and will be used when detected, it will fall back to Legacy BIOS booting when not detected.
 
 See [Root Partition Settings](docs/root-partition-settings.md) for the partition layout.
@@ -110,20 +104,27 @@ The root pool can be [encrypted](docs/zfs-encryption-settings.md) with LUKS (def
 
 ### SSHD Configuration Settings
 
-Some of the [SSHD configuration](docs/custom-sshd-settings.md) options can be defined to help lock down your base server image. For example, Password Authentication will be disabled, Pubkey Authentication will be enabled, Root login will only be permitted via PubKey Authentication.
+Some of the [SSHD configuration](docs/custom-sshd-settings.md) options can be defined to help lock down your base server image. By default, Password Authentication is disabled, Pubkey Authentication is enabled and root login is only permitted via PubKey Authentication.
 
 ### Dropbear Support
 
 When a computer with an encrypted root pool is rebooted, someone needs to be at the console to enter the passphrase.
 
-* You can enable the option to install [Dropbear](https://en.wikipedia.org/wiki/Dropbear_(software)) to provide a lightweight SSH server inside ZFSBootMenu during the boot process.
-* This allows you to remotely SSH to the console to provide the passphrase to allow the machine to continue to boot.
-* Dropbear listens on port 222.
-* ECDSA or ED25519 keys can be used to connect to Dropbear (no passwords allowed).
+* You can enable the option to install [Dropbear](https://en.wikipedia.org/wiki/Dropbear_(software)), a lightweight SSH server, inside ZFSBootMenu.
+* This allows you to SSH in remotely and provide the passphrase, so the machine continues to boot.
+* Dropbear listens on port 222 and only accepts the SSH keys listed in `public_key_for_dropbear` (no passwords).
 
 ---
 
 ## How do I set it up
+
+### Get the Role
+
+Clone the repository into the roles directory of your Ansible project. The directory name is the role name used in the playbook below:
+
+```bash
+git clone https://github.com/karigeo/ansible-zfs_on_root.git roles/zfs_on_root
+```
 
 ### Edit your inventory document
 
@@ -169,6 +170,10 @@ all:
             dns_search_domain: localdomain
 
       vars:
+        # User created on the live CD by do_ssh.sh, and its SSH key
+        ansible_user: ansible
+        ansible_ssh_private_key_file: ~/.ssh/ansible
+
         # Define the default domain these hosts will use
         domain_name: "localdomain"
 
@@ -178,15 +183,16 @@ all:
 ```
 
 * `zfs_on_root_install_group:` block lists the hostname(s) that you intend to boot the Live CD on and perform a ZFS on Root installation.
+* Ansible connects to the same address (`ansible_host`, or the inventory name) before and after the reboot into the new system. The network configuration of the new system (`ipv4`, see [Computer Configuration Settings](docs/computer-config-settings.md#network)) must therefore give it the address the live CD had, e.g. the same static address or a DHCP reservation.
 
 #### Inventory / Host Variables
 
-All of these are optional, if not provided you will be prompted to enter values if needed.
+`host_name` and `disk_devices` are prompted for if they are not set. Everything else has a default in `defaults/main.yml`.
 
-* `host_name:` defines the name of the new system to be built, if set here you will not be prompted for it.
+* `host_name:` defines the name of the new system to be built. If not set, you are prompted for it (default: the first part of `ansible_host`).
 * `disk_devices:` defines the names of the disk devices to use when building the ZFS pools if you know them in advance.
   * This makes reinstalls easier. Define unique configurations when needed.
-  * When this is set you will not be prompted.
+  * If not set, you are prompted for it (the detected SATA/SCSI, MMC and NVMe disks are suggested; virtio disks such as `vda` must be entered explicitly).
   * Default rules will make 2 devices a mirror, 3 will use a raidz1, 4 will join two mirrored vdevs into a pool (you can redefine these)
   * Devices are referenced by `/dev/disk/by-id`, or `/dev/disk/by-path` for disks without an id (e.g. virtio disks without serial).
 * `root_partition_size:` allows you to specify the partition size to be used for the root pool.
@@ -197,6 +203,7 @@ All of these are optional, if not provided you will be prompted to enter values 
 * `domain_name:` under `vars:` sets the domain name that will be used for each host created. If an individual host needs a different domain name then just add a `domain_name:` under that host.
 * `apt_http_proxy` and `apt_https_proxy` can be used to specify where to find an Apt-Cacher-NG instance available on your network
   * Apt-Cacher-NG will cache downloaded `apt` packages reducing your internet bandwidth needs for packages
+  * The proxy is configured on the live CD and stays configured in the new system (`/etc/apt/apt.conf.d/01proxy`). An unset value becomes `false` (no proxy).
 * Any setting of `defaults/main.yml` (e.g. `disk_encryption_type`, `ipv4`, `apply_dropbear_settings`) can be set per host.
 
 ---
@@ -209,7 +216,7 @@ You are defining reasonable defaults. Individual hosts that need something a lit
 
 #### Disable Logging Secrets
 
-Ansible tasks that reference secrets (password or passphrase) may show them on the screen as well as settings summary screens. Showing passwords can be enabled if that would help troubleshooting.
+By default, secrets (passphrase, passwords) are hidden in the task output and on the summary screens. Set `no_log_secrets` to `false` to show them, if that helps troubleshooting.
 
 ```yml
 # Don't log or display secrets (passphrase, passwords) when running the playbook
@@ -223,7 +230,7 @@ This temporary root password is only used during the build process. It is expire
 ```yml
 # Temporary root password used during the build process.
 # It is expired in final_setup (must be changed on first login).
-default_root_password: "change!me"
+default_root_password: "root"
 ```
 
 #### Installer System Check
@@ -247,9 +254,9 @@ Independent of this setting, the install steps refuse to run if one of the targe
 
 ### Additional Configuration Files
 
-There should be no reason to alter the configuration file `vars/main.yml` which defines all the details and flags to construct partitions, root pools, and how all the datasets will be created. If this type of information interests you, this is where you will find it... but don't change anything unless you understand what you are looking at.
+There should be no reason to alter `vars/main.yml`. It defines the details to construct partitions, root pools and datasets, the pinned versions of ZFSBootMenu and its helpers, and the tag lists. If this type of information interests you, this is where you will find it... but don't change anything unless you understand what you are looking at.
 
-Secrets can be placed in `secrets/main.yml` (not tracked by git), it is loaded at the start of the role.
+Secrets (e.g. `passphrase`, `default_root_password`) can be placed in `secrets/main.yml` inside the role directory. The file is optional and not tracked by git; if it exists, it is loaded at the start of the role.
 
 ---
 
@@ -257,34 +264,25 @@ Secrets can be placed in `secrets/main.yml` (not tracked by git), it is loaded a
 
 ### Prepare the Install Environment
 
-1. Boot the Debian Live CD:
-    * Select option <button name="button">Live</button>.
-    * Connect your system to the internet as appropriate (e.g. join your Wi-Fi network).
-    * Open a terminal within the Live CD environment - press <kbd>Ctrl</kbd> <kbd>Alt</kbd>-<kbd>T</kbd>.
+1. Boot the Debian Live CD on the target system:
+    * Select the option <button name="button">Live</button>.
+    * Standard image: log in on the console (user `user`, password `live`). Desktop image: open a terminal.
+    * Connect the system to the network. Ansible later reaches the installed system at the same address, see the inventory notes above.
 
-2. Install and start the OpenSSH server in the Live CD environment (see helper script below):
+2. Run the helper script `do_ssh.sh`. It creates an `ansible` user account with a password and passwordless `sudo`, installs the SSH server, Python, etc.:
 
-#### Fetch Helper Script
+    ```bash
+    wget https://raw.githubusercontent.com/karigeo/ansible-zfs_on_root/main/files/do_ssh.sh
 
-The helper script will perform many steps for you such as create an `ansible` user account, define a password for that account, grant the `ansible` account `sudo` privileges, install SSH server, python, etc.
+    chmod +x do_ssh.sh
 
-##### Option 1 - Proper Way to Run Helper Script
+    ./do_ssh.sh
+    ```
 
-```bash
-wget https://raw.githubusercontent.com/karigeo/ansible-zfs_on_root/master/files/do_ssh.sh
+    * When prompted for the Ansible password, enter and confirm it. This is a temporary password, only needed to push the SSH key to the target machine. It only exists on the live CD: the `ansible` user of the new system has no password, only SSH key authentication is allowed.
+    * If you can't download the script, see the [manual steps](docs/do_ssh_helper_script.md).
 
-chmod +x do_ssh.sh
-
-./do_ssh.sh
-```
-
-* When prompted for the Ansible password, enter and confirm it. This will be a temporary password only needed just to push the SSH Key to the target machine. The Ansible password will be disabled and only SSH authentication will be allowed.
-
-The Live CD Install Environment is now ready. Nothing else you need to do here. The rest is done from the Ansible Control node.
-
-#### If Helper Script is not Available
-
-* [Manual steps](docs/do_ssh_helper_script.md) if you are unable to access "do_ssh.sh" Help Script.
+The Live CD Install Environment is now ready. The rest is done from the Ansible control node.
 
 ### Push your Ansible Public Key to the Install Environment
 
@@ -302,6 +300,8 @@ Number of key(s) added: 1
 Now try logging into the machine, with:   "ssh 'ansible@<remote_host_name>'"
 and check to make sure that only the key(s) you wanted were added.
 ```
+
+The live CD creates new SSH host keys on every boot, and the installed system takes over the host keys of the live CD it was installed from. For reinstalls, remove the old `known_hosts` entry or let Ansible skip host key checking for these hosts (e.g. `ssh_args = -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no` in `ansible.cfg`).
 
 Optionally, you can test connectivity easily to verify SSH has been configured correctly.
 
@@ -350,7 +350,7 @@ After a while, if all goes well, you will have a reasonably decent standardized 
 
 ### Alternative Step by Step Installation
 
-As an alternative to running the entire playbook at one time, it can be run sections at a time using the ansible `tags` as defined below. This method can be used to troubleshoot issues and replay steps if you have a way of rolling back previous failures. Failures can be rolled back either manually or via snapshots in Virtualbox or equivalent.
+As an alternative to running the entire playbook at one time, it can be run sections at a time using the ansible `tags` as defined below. This method can be used to troubleshoot issues and replay steps if you have a way of rolling back previous failures, e.g. manually or with VM snapshots.
 
 To run just one step use its tag instead of `bootstrap`:
 
@@ -364,7 +364,7 @@ Multiple tags can be combined to run several tasks:
 --tags="create_pools, create_filesystems, create_datasets"
 ```
 
-This is the list and order of execution for all tags defined for this role:
+This is the list and order of execution for all step tags of this role:
 
 ```text
     tags:
@@ -393,9 +393,11 @@ This is the list and order of execution for all tags defined for this role:
       - restart_remote_final
 ```
 
-Helper tasks, basic sanity checks and mandatory tasks are already marked as `always` and will always be processed to setup the base ansible working environment reading configuration files, setting variables, etc... nothing special you need to do.
+`disable_ipv6` and `update_sshd_settings` can also be run on their own. `confirm_defaults` is the settings summary shown before the run (see [Skipping Tags](#skipping-tags)).
 
-NOTE: The steps `config_system` to `first_boot_prep` run inside the chroot (via SSH port 8922), they need the live CD environment prepared by the previous steps. The steps from `localization` on run on the installed system after the first reboot.
+Helper tasks, basic sanity checks and mandatory tasks are tagged `always` and run with every tag: reading configuration files, prompting for missing values, setting variables, etc. There is nothing special you need to do.
+
+NOTE: `config_system` starts on the live CD (debootstrap, chroot preparation) and continues inside the chroot. The steps from `config_system` to `first_boot_prep` run inside the chroot (via SSH port 8922) and need the live CD environment prepared by the previous steps. The steps from `localization` on run on the installed system after the first reboot.
 
 Each group of steps starts with a check that stops the run unless the target is where these steps belong, so a step tag given for the wrong system fails before anything is changed:
 
@@ -405,7 +407,7 @@ Each group of steps starts with a check that stops the run unless the target is 
 | `config_system` to `first_boot_prep` | chroot of the new system | the Live CD checks, the root dataset mounted at `/mnt`, port 8922 lands in a chroot of it on the same running kernel |
 | `localization` to `restart_remote_final` | Installed system | booted from the root dataset, not in a chroot |
 
-For example, `--tags clear_partition_tables_from_devices` against the installed system fails at the check instead of wiping its disks. The checks are tagged `always`, so `--skip-tags always` would skip them.
+For example, `--tags clear_partition_tables_from_devices` against the installed system fails at the check instead of wiping its disks.
 
 ### Grouping Tags
 
@@ -433,21 +435,12 @@ Specific tags can also be skipped. For example, if you do not wish to see the ma
 ## Known Issues
 
 * Nothing happens after 1st reboot? See if [UEFI BIOS Bugs / Glitches / Issues](./docs/uefi-bugs-issues.md) helps.
-* `mdadm` error [super1.x cannot open / Device or resource busy](./docs/mdadm-error-cannot-open.md) during `config_boot_fs` tag processing
 
 ---
 
 ## More about Root Pool using Mirrored vdev Process
 
-This topology is not available from the Debian installer and is not covered by the [OpenZFS HowTo method](https://openzfs.github.io/openzfs-docs/Getting%20Started/Debian/index.html).
-
-Here is a brief [overview with additional information](docs/root-pools-multi-mirrored-vdevs.md).
-
----
-
-## Helper Scripts
-
-* [do_ssh.sh](docs/do_ssh_helper_script.md) - Makes a LiveCD environment accessible to Ansible via SSH.
+Here is a brief [overview with additional information](docs/root-pools-multi-mirrored-vdevs.md) about root pools built from multiple mirrored vdevs.
 
 ---
 
@@ -457,6 +450,6 @@ If your system is unable to boot, then boot from the Debian Live CD to create a 
 
 ---
 
-### Replacing a Swap Device
+## Replacing a Disk
 
-NOTE: `mdadm` is used to create mirrored or raid10 swap arrays. If you will be replacing a drive then you should mark its swap partition as **failed** before removing it from the system, see [Swap Partition Settings](docs/swap-partition-settings.md#replacing-a-disk).
+On multi-disk systems every disk holds a member of the root pool and of the `mdadm` arrays (ESP, swap, LVM). See [Replacing a Disk](docs/replacing-a-disk.md) for what needs to be done, and mark the old partitions as **failed** before removing the disk.
