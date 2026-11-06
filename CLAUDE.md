@@ -67,7 +67,7 @@ The checks read fresh state; don't use `ansible_facts` there (gathered once at p
 
 - `defaults/main.yml`: user-facing settings (`require_live_cd`, passwords, locale, network `ipv4.interfaces`/`ipv4.bridges`, swap, `disk_encryption_type`, pool/partition sizes, `set_root_pool_type`, sshd, dropbear).
 - `vars/main.yml`: internal constants and derived values (partition numbers/flags, `root_pool_devices`, `luks_root_mapper_names`, `swap_device`, `lvm_device`, pool/dataset options, pinned versions of ZBM/zbm-luks-unlock/dracut-crypt-ssh, the tag lists per group). Many are lazy expressions on `disk_by_id`, which is built in `01_basic_checks.yml`.
-- `secrets/main.yml`: loaded first via `include_vars` (gitignored).
+- `secrets/main.yml`: optional, loaded first via `include_vars` if it exists in the role directory (gitignored).
 - `docs/`: user documentation per topic; keep it in sync with `defaults/main.yml`.
 
 ### Disk layout and devices

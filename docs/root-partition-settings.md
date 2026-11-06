@@ -8,10 +8,12 @@ Every disk gets the same layout:
 
 | Partition | Content | Type |
 |-----------|---------|------|
-| 1 | EFI system partition (512 MiB, FAT32), mdadm mirror (metadata 1.0) on multiple disks | EF00 |
+| 1 | EFI system partition (512 MiB, FAT32, `boot_partition_size_mb` in `vars/main.yml`), mdadm mirror (metadata 1.0) on multiple disks | EF00, legacy BIOS bootable attribute (syslinux) |
 | 2 | Swap (optional, `enable_swap_partitions`) | 8200, FD00 (mdadm) on multiple disks |
 | 3 | ZFS root pool | BF00, 8309 (LUKS) |
 | 4 | LVM (optional, `create_lvm_partition`) | 8e00, 8309 (LUKS), FD00 (mdadm) on 3+ disks |
+
+The partition numbers are fixed: without swap there is no partition 2, the others keep their numbers.
 
 With multiple disks the firmware sees each ESP member as a plain FAT32 partition. Anything that writes to the ESP outside Linux (firmware, rEFInd) changes only that member and the mirror diverges silently. The role therefore sets `use_nvram true` in `refind.conf` (rEFInd keeps its variables in NVRAM); don't take rEFInd screenshots (F10) or install tools from the firmware side onto the ESP.
 
@@ -32,25 +34,24 @@ Based on the names above:
 * User data is stored in ZFS dataset `rpool/ROOT/home` (and `rpool/ROOT/home/root` for `/root`), outside of the OS dataset.
 * For Proxmox VE, `rpool/ROOT/pve-1/var/lib/vz`, `rpool/ROOT/pve-1/etc-pve` and `rpool/data` are created as well.
 
-NOTE: The operating system dataset gets a snapshot automatically when `apt` or `dpkg` installs or removes packages. This allows the OS to be rolled back to previous snapshots without impacting user data.
+NOTE: The operating system dataset (`rpool/ROOT/pve-1`, without its child datasets such as `var/log`) gets a snapshot `@apt_<date>` before every `apt`/`dpkg` run, and `@base_install` at the end of the installation. This allows the OS to be rolled back to previous snapshots without impacting user data.
 
 ## Root Partition Size
 
-* By default the root partition uses all remaining space of each device.
-  * If devices of different size are used, the size of the root pool is limited by the smallest device.
-  * All remaining space not used will remain unallocated. When the smallest device is replaced later, partition sizes can be adjusted and the ZFS pool can be expanded.
-* You can specify a specific partition size for the root pool on each device. This is useful if you want standard size partitions on each computer.
-* Or you can specify how much space NOT to use, leaving a specific amount of unallocated space for the LVM partition or other use.
+`root_partition_size` is the size of the root partition on each device:
 
-  ```yaml
-  # Examples:
-  # "+256G" will create partition 256Gib in size
-  # "-200M" will use all available space, minus 200Mib
-  # "0" (zero) use all available space
-  root_partition_size: "-200G"
-  ```
+```yaml
+# Examples:
+# "+256G" will create partition 256Gib in size
+# "-200M" will use all available space, minus 200Mib
+# "0" (zero) use all available space
+root_partition_size: "-200G"
+```
 
-* Unallocated space is after the last partition created. This simplifies making additional partitions or expanding partitions later.
+* `0` uses all remaining space of each device. Only use it without LVM partition (`create_lvm_partition: false`), otherwise there is no space left for it.
+* A positive size (`+256G`) gives standard size partitions on each computer.
+* A negative size (`-200G`) uses all space except the given amount, which is left for the LVM partition (or stays unallocated without LVM).
+* If devices of different size are used, the root pool is limited by the smallest device. Space not used by the partitions stays unallocated at the end of the disk; when the smallest device is replaced later, partitions can be adjusted and the pool expanded.
 
 ## LVM Partition
 
@@ -75,7 +76,7 @@ lvm_volume_size: "99%VG"
 
 * With 2 devices the LVM partitions form an mdadm mirror, with 3 or more devices an mdadm raid5.
 * With encryption (`luks` or `native`) the volume group lives in a LUKS container, unlocked at boot with a keyfile stored on the encrypted root.
-* `root_partition_size` must leave room for the LVM partition (e.g. `-200G`).
+* The LVM partition is created after the root partition: `0` uses the rest of the disk, so `root_partition_size` must leave room for it (e.g. `-200G`). With a fixed LVM size (e.g. `+100G`) use a fixed root size or a negative one that leaves at least that much (e.g. `-200G`); `root_partition_size: "0"` is refused by the sanity checks then.
 
 ---
 
@@ -87,8 +88,9 @@ Define ZFS Root Pool Type Rules:
   * This is the recommended way to configure ZFS with many devices instead of using `raidz`.
   * This gives higher performance and much faster recovery from a single disk failure.
   * If you don't want this, use `raidz` or `raidz2`.
-* Any ODD number of devices should be a `raidz` or `raidz2` type (or an n-way `mirror`).
+* 3 devices can be a `raidz` or a 3-way `mirror`. 5, 7, ... devices must be `raidz` or `raidz2` (an odd number of 5 or more devices of type `mirror` is refused).
   * A `raidz2` requires 4 or more devices.
+* 1 device must be `""` (single device), 2 devices must be `mirror`.
 * You can add additional entries to meet your requirements. Anything not defined will be treated as `raidz` pool (`default`).
 
   ```yaml
